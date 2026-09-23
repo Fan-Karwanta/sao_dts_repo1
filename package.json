@@ -1,0 +1,29 @@
+{
+  "name": "sao-document-tracking-system",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.17.1",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @sao/web --filter @sao/api dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "db:generate": "dotenv -e .env -- pnpm --filter @sao/db generate",
+    "db:validate": "dotenv -e .env -- pnpm --filter @sao/db validate",
+    "db:migrate": "dotenv -e .env -- pnpm --filter @sao/db migrate:dev",
+    "db:deploy": "dotenv -e .env -- pnpm --filter @sao/db migrate:deploy",
+    "db:seed": "dotenv -e .env -- pnpm --filter @sao/db seed"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.36.0",
+    "dotenv-cli": "10.0.0",
+    "eslint": "9.36.0",
+    "globals": "16.4.0",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.44.1"
+  }
+}

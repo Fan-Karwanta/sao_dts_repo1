@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f4f6f8;
+  --foreground: #17211b;
+  --surface: #ffffff;
+  --primary: #154c2e;
+  --primary-strong: #0d3820;
+  --accent: #d5a72e;
+  --muted: #627067;
+  --border: #dfe5e1;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-primary: var(--primary);
+  --color-primary-strong: var(--primary-strong);
+  --color-accent: var(--accent);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.sheet td {
+  scroll-margin-top: var(--sheet-header);
+  scroll-margin-left: var(--sheet-sticky);
+}
+
+.sheet td.sticky {
+  scroll-margin-left: 0;
+}
+
+@keyframes cell-flash {
+  from {
+    background-color: rgb(251 188 4 / 0.55);
+  }
+  to {
+    background-color: rgb(251 188 4 / 0);
+  }
+}
+
+.cell-flash {
+  animation: cell-flash 1.8s ease-out forwards;
+}

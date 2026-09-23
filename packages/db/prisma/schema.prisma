@@ -1,0 +1,448 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  PENDING
+  ACTIVE
+  BLOCKED
+  REJECTED
+}
+
+enum RegistrationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum WorkflowVersionStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum WorkflowNodeType {
+  START
+  FIELD
+  DECISION
+  END
+}
+
+enum WorkflowEdgeType {
+  FORWARD
+  RETURN
+  BRANCH
+  EXCEPTION
+}
+
+enum FieldType {
+  TEXT
+  DATE
+  DATETIME
+  DECIMAL
+  INTEGER
+  ENUM
+  JSON
+  REMARKS
+}
+
+enum DocumentStatus {
+  ACTIVE
+  RETURNED
+  COMPLETED
+  CANCELLED
+}
+
+enum MovementType {
+  CREATE
+  ADVANCE
+  RETURN
+  REROUTE
+  COMPLETE
+}
+
+enum ConcernStatus {
+  OPEN
+  RESOLVED
+  CANCELLED
+}
+
+model User {
+  id                       String                 @id @default(uuid()) @db.Uuid
+  publicId                 String                 @unique @default(uuid()) @db.Uuid
+  fullName                 String
+  username                 String                 @unique
+  email                    String                 @unique
+  officeDesignation        String?
+  status                   UserStatus             @default(PENDING)
+  createdAt                DateTime               @default(now())
+  updatedAt                DateTime               @updatedAt
+  credential               Credential?
+  sessions                 Session[]
+  passwordResetTokens      PasswordResetToken[]
+  userRoles                UserRole[]
+  reviewedRegistrations    RegistrationRequest[]  @relation("RegistrationReviewer")
+  workflowVersionsCreated  WorkflowVersion[]      @relation("WorkflowVersionCreator")
+  documentsCreated         DocumentRecord[]       @relation("DocumentCreator")
+  fieldValuesUpdated       DocumentFieldValue[]   @relation("FieldValueUpdater")
+  movementsCreated         DocumentMovement[]     @relation("MovementActor")
+  concernsOpened           CommentOrConcern[]     @relation("ConcernOpener")
+  concernsResolved         CommentOrConcern[]     @relation("ConcernResolver")
+  auditEventsAsActor       AuditEvent[]           @relation("AuditActor")
+  auditEventsAsEffective   AuditEvent[]           @relation("AuditEffectiveActor")
+  impersonationsAsAdmin    ImpersonationSession[] @relation("ImpersonationAdmin")
+  impersonationsAsUser     ImpersonationSession[] @relation("ImpersonationUser")
+  notifications            Notification[]
+  settingsUpdated          SystemSetting[]        @relation("SettingUpdater")
+
+  @@index([status])
+}
+
+model Credential {
+  userId       String   @id @db.Uuid
+  passwordHash String
+  passwordChangedAt  DateTime @default(now())
+  mustChangePassword Boolean  @default(false)
+  failedLoginCount   Int      @default(0)
+  lockedUntil  DateTime?
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Session {
+  id            String   @id @default(uuid()) @db.Uuid
+  tokenHash     String   @unique
+  userId        String   @db.Uuid
+  expiresAt     DateTime
+  lastSeenAt    DateTime @default(now())
+  createdAt     DateTime @default(now())
+  revokedAt     DateTime?
+  ipAddress     String?
+  userAgent     String?
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  tokenHash String   @unique
+  userId    String   @db.Uuid
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model RegistrationRequest {
+  id                String             @id @default(uuid()) @db.Uuid
+  fullName          String
+  username          String             @unique
+  email             String             @unique
+  officeDesignation String?
+  passwordHash      String
+  requestedRoleId   String?            @db.Uuid
+  termsVersion      String
+  termsAcceptedAt   DateTime
+  status            RegistrationStatus @default(PENDING)
+  reviewedById      String?            @db.Uuid
+  reviewedAt        DateTime?
+  reviewReason      String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  requestedRole     Role?              @relation(fields: [requestedRoleId], references: [id], onDelete: SetNull)
+  reviewedBy        User?              @relation("RegistrationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+}
+
+model Department {
+  id            String         @id @default(uuid()) @db.Uuid
+  key           String         @unique
+  name          String         @unique
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  userRoles     UserRole[]
+  workflowNodes WorkflowNode[]
+}
+
+model Role {
+  id                   String                @id @default(uuid()) @db.Uuid
+  key                  String                @unique
+  name                 String                @unique
+  description          String?
+  isSystem             Boolean               @default(false)
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  rolePermissions      RolePermission[]
+  userRoles            UserRole[]
+  registrationRequests RegistrationRequest[]
+  featureRoles         PageFeatureRole[]
+}
+
+model Permission {
+  id              String           @id @default(uuid()) @db.Uuid
+  key             String           @unique
+  name            String
+  description     String?
+  rolePermissions RolePermission[]
+}
+
+model RolePermission {
+  roleId       String     @db.Uuid
+  permissionId String     @db.Uuid
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model UserRole {
+  userId       String      @db.Uuid
+  roleId       String      @db.Uuid
+  departmentId String?     @db.Uuid
+  assignedAt   DateTime    @default(now())
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role         Role        @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+
+  @@id([userId, roleId])
+  @@index([departmentId])
+}
+
+model PageFeature {
+  id           String            @id @default(uuid()) @db.Uuid
+  key          String            @unique
+  name         String
+  isEnabled    Boolean           @default(true)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  featureRoles PageFeatureRole[]
+}
+
+model PageFeatureRole {
+  featureId String      @db.Uuid
+  roleId    String      @db.Uuid
+  canAccess Boolean     @default(true)
+  feature   PageFeature @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  role      Role        @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([featureId, roleId])
+}
+
+model Workflow {
+  id          String            @id @default(uuid()) @db.Uuid
+  key         String            @unique
+  name        String
+  description String?
+  isActive    Boolean           @default(true)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  versions    WorkflowVersion[]
+}
+
+model WorkflowVersion {
+  id          String                @id @default(uuid()) @db.Uuid
+  workflowId  String                @db.Uuid
+  version     Int
+  status      WorkflowVersionStatus @default(DRAFT)
+  createdById String                @db.Uuid
+  createdAt   DateTime              @default(now())
+  publishedAt DateTime?
+  definitionHash String?
+  workflow    Workflow              @relation(fields: [workflowId], references: [id], onDelete: Restrict)
+  createdBy   User                  @relation("WorkflowVersionCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  nodes       WorkflowNode[]
+  edges       WorkflowEdge[]
+  documents   DocumentRecord[]
+
+  @@unique([workflowId, version])
+  @@index([workflowId, status])
+}
+
+model WorkflowNode {
+  id                String           @id @default(uuid()) @db.Uuid
+  workflowVersionId String           @db.Uuid
+  key               String
+  label             String
+  type              WorkflowNodeType
+  fieldType         FieldType?
+  departmentId      String?          @db.Uuid
+  isRequired        Boolean          @default(false)
+  positionX         Float
+  positionY         Float
+  configuration     Json             @default("{}")
+  sortOrder         Int?
+  workflowVersion   WorkflowVersion  @relation(fields: [workflowVersionId], references: [id], onDelete: Cascade)
+  department        Department?      @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  outgoingEdges     WorkflowEdge[]   @relation("EdgeSource")
+  incomingEdges     WorkflowEdge[]   @relation("EdgeTarget")
+  currentDocuments  DocumentRecord[] @relation("CurrentWorkflowNode")
+  fieldValues       DocumentFieldValue[]
+  movementsFrom     DocumentMovement[] @relation("MovementFromNode")
+  movementsTo       DocumentMovement[] @relation("MovementToNode")
+  concerns          CommentOrConcern[]
+
+  @@unique([workflowVersionId, key])
+  @@index([departmentId])
+}
+
+model WorkflowEdge {
+  id                String           @id @default(uuid()) @db.Uuid
+  workflowVersionId String           @db.Uuid
+  sourceNodeId      String           @db.Uuid
+  targetNodeId      String           @db.Uuid
+  type              WorkflowEdgeType
+  label             String?
+  condition         Json?
+  workflowVersion   WorkflowVersion  @relation(fields: [workflowVersionId], references: [id], onDelete: Cascade)
+  sourceNode        WorkflowNode     @relation("EdgeSource", fields: [sourceNodeId], references: [id], onDelete: Cascade)
+  targetNode        WorkflowNode     @relation("EdgeTarget", fields: [targetNodeId], references: [id], onDelete: Cascade)
+
+  @@unique([workflowVersionId, sourceNodeId, targetNodeId, type])
+  @@index([sourceNodeId])
+  @@index([targetNodeId])
+}
+
+model DocumentRecord {
+  id                String          @id @default(uuid()) @db.Uuid
+  publicId          String          @unique @default(uuid()) @db.Uuid
+  referenceNumber   String          @unique
+  title             String
+  status            DocumentStatus  @default(ACTIVE)
+  workflowVersionId String          @db.Uuid
+  currentNodeId     String?         @db.Uuid
+  createdById       String          @db.Uuid
+  version           Int             @default(0)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  completedAt       DateTime?
+  workflowVersion   WorkflowVersion @relation(fields: [workflowVersionId], references: [id], onDelete: Restrict)
+  currentNode       WorkflowNode?   @relation("CurrentWorkflowNode", fields: [currentNodeId], references: [id], onDelete: Restrict)
+  createdBy         User            @relation("DocumentCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  fieldValues       DocumentFieldValue[]
+  movements         DocumentMovement[]
+  concerns          CommentOrConcern[]
+
+  @@index([status, updatedAt])
+  @@index([workflowVersionId])
+  @@index([currentNodeId])
+}
+
+model DocumentFieldValue {
+  id          String         @id @default(uuid()) @db.Uuid
+  documentId  String         @db.Uuid
+  nodeId      String         @db.Uuid
+  value       Json
+  version     Int            @default(0)
+  updatedById String         @db.Uuid
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  document    DocumentRecord @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  node        WorkflowNode   @relation(fields: [nodeId], references: [id], onDelete: Restrict)
+  updatedBy   User           @relation("FieldValueUpdater", fields: [updatedById], references: [id], onDelete: Restrict)
+
+  @@unique([documentId, nodeId])
+  @@index([nodeId])
+}
+
+model DocumentMovement {
+  id          String         @id @default(uuid()) @db.Uuid
+  documentId  String         @db.Uuid
+  type        MovementType
+  fromNodeId  String?        @db.Uuid
+  toNodeId    String?        @db.Uuid
+  actorId     String         @db.Uuid
+  reason      String?
+  metadata    Json           @default("{}")
+  occurredAt  DateTime       @default(now())
+  document    DocumentRecord @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  fromNode    WorkflowNode?  @relation("MovementFromNode", fields: [fromNodeId], references: [id], onDelete: Restrict)
+  toNode      WorkflowNode?  @relation("MovementToNode", fields: [toNodeId], references: [id], onDelete: Restrict)
+  actor       User           @relation("MovementActor", fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([documentId, occurredAt])
+}
+
+model CommentOrConcern {
+  id           String         @id @default(uuid()) @db.Uuid
+  documentId   String         @db.Uuid
+  nodeId       String?        @db.Uuid
+  status       ConcernStatus  @default(OPEN)
+  message      String
+  openedById   String         @db.Uuid
+  resolvedById String?        @db.Uuid
+  createdAt    DateTime       @default(now())
+  resolvedAt   DateTime?
+  document     DocumentRecord @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  node         WorkflowNode?  @relation(fields: [nodeId], references: [id], onDelete: Restrict)
+  openedBy     User           @relation("ConcernOpener", fields: [openedById], references: [id], onDelete: Restrict)
+  resolvedBy   User?          @relation("ConcernResolver", fields: [resolvedById], references: [id], onDelete: Restrict)
+
+  @@index([documentId, status])
+}
+
+model AuditEvent {
+  id               String   @id @default(uuid()) @db.Uuid
+  actorId          String?  @db.Uuid
+  effectiveActorId String?  @db.Uuid
+  action           String
+  targetType       String
+  targetId         String?
+  before           Json?
+  after            Json?
+  requestId        String?
+  ipAddress        String?
+  userAgent        String?
+  occurredAt       DateTime @default(now())
+  actor            User?    @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  effectiveActor   User?    @relation("AuditEffectiveActor", fields: [effectiveActorId], references: [id], onDelete: SetNull)
+
+  @@index([occurredAt])
+  @@index([actorId, occurredAt])
+  @@index([targetType, targetId])
+}
+
+model ImpersonationSession {
+  id        String   @id @default(uuid()) @db.Uuid
+  adminId   String   @db.Uuid
+  userId    String   @db.Uuid
+  reason    String
+  startedAt DateTime @default(now())
+  expiresAt DateTime
+  endedAt   DateTime?
+  admin     User     @relation("ImpersonationAdmin", fields: [adminId], references: [id], onDelete: Restrict)
+  user      User     @relation("ImpersonationUser", fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([adminId, startedAt])
+  @@index([userId, startedAt])
+}
+
+model Notification {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  type      String
+  title     String
+  body      String
+  data      Json     @default("{}")
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
+}
+
+model SystemSetting {
+  key         String   @id
+  value       Json
+  updatedById String?  @db.Uuid
+  updatedAt   DateTime @updatedAt
+  updatedBy   User?    @relation("SettingUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
+}

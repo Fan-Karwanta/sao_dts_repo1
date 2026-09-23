@@ -1,0 +1,13 @@
+packages:
+  - apps/*
+  - packages/*
+
+minimumReleaseAge: 10080
+
+onlyBuiltDependencies:
+  - "@prisma/client"
+  - "@prisma/engines"
+  - argon2
+  - esbuild
+  - prisma
+  - unrs-resolver
