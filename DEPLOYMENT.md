@@ -130,7 +130,7 @@ npx vercel --prod
 
 ## Troubleshooting
 
-- **Build fails on Hostinger at install:** confirm root directory is `/` (repo root) and package manager is `pnpm` — workspace deps can't resolve from `apps/api` alone.
+- **Build fails on Hostinger at install:** confirm root directory is `/` (repo root) and package manager is `npm` — workspace deps can't resolve from `apps/api` alone. The API compiles directly with `tsc` because Hostinger omits dev-only `@nestjs/cli` when `NODE_ENV=production`.
 - **App starts but health check fails:** check Hostinger app logs; confirm `DATABASE_URL` is set and the Neon compute isn't suspended (first query after idle is slow — retry).
 - **Login works locally but not in prod:** almost always the cookie — confirm `NODE_ENV=production` is set on Hostinger so `SameSite=None`/`Secure` applies, and that `WEB_ORIGIN` exactly matches the Vercel URL (no trailing slash).
 - **`Invalid request origin` on POST/PUT:** the CSRF guard compares `Origin` to `WEB_ORIGIN` — same fix as above.
