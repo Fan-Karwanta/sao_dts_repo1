@@ -3,6 +3,7 @@ packages:
   - packages/*
 
 minimumReleaseAge: 10080
+linkWorkspacePackages: true
 
 onlyBuiltDependencies:
   - "@prisma/client"

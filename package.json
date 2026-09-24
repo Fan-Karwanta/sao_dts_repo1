@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "packageManager": "pnpm@10.17.1",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "engines": {
     "node": ">=22.0.0"
   },
@@ -17,7 +21,7 @@
     "db:migrate": "dotenv -e .env -- pnpm --filter @sao/db migrate:dev",
     "db:deploy": "dotenv -e .env -- pnpm --filter @sao/db migrate:deploy",
     "db:seed": "dotenv -e .env -- pnpm --filter @sao/db seed",
-    "deploy:api": "pnpm --filter @sao/db generate && pnpm -r --filter @sao/api... build"
+    "deploy:api": "npm run build -w @sao/contracts && npm run generate -w @sao/db && npm run build -w @sao/db && npm run build -w @sao/api"
   },
   "devDependencies": {
     "@eslint/js": "9.36.0",
