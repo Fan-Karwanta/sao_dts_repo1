@@ -37,7 +37,7 @@ Run these before considering a change complete:
 - `pnpm lint`
 - `pnpm typecheck`
 - `pnpm test`
-- `pnpm build`
+- `pnpm build:all` (root `build` is the Hostinger deploy chain — API packages only)
 
 ## Security
 

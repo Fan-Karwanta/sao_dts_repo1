@@ -20,7 +20,7 @@ Important caveats (be aware before going live):
 
 - `apps/api/src/auth/auth.controller.ts` — session cookie uses `SameSite=None` in production (required: `vercel.app` ↔ Hostinger domain are different sites; `Strict` cookies would never be sent and login would break). `Secure` is already on in production and both hosts use HTTPS.
 - `apps/api/src/main.ts` — listens on `PORT` (injected by the host) with `API_PORT` fallback for local dev.
-- `package.json` — added `deploy:api` script: generates the Prisma client, then builds `@sao/contracts`, `@sao/db`, and `@sao/api` in dependency order. This is the build command Hostinger runs.
+- `package.json` — the root `build` script runs `deploy:api`, which generates the Prisma client then builds `@sao/contracts`, `@sao/db`, and `@sao/api` in dependency order via `npm -w`. Hostinger locks npm deploys to `npm run build`, so this is exactly what its build runs. Use `pnpm build:all` locally to build every package including the web app.
 
 ---
 
@@ -48,8 +48,8 @@ If you've been developing against this Neon DB already, `db:deploy` will report 
    | Branch | `main` (or your default branch) |
    | Node.js version | **22** |
    | Root directory | `/` — repo root, **not** `apps/api`. The API depends on workspace packages (`@sao/contracts`, `@sao/db`) that must also be built, so install + build must run at monorepo root |
-   | Package manager | `pnpm` (auto-detected from `pnpm-lock.yaml`) |
-   | Build command | `deploy:api` |
+   | Package manager | `npm` — **not** pnpm; Hostinger's pnpm/corepack install is broken |
+   | Build command | `npm run build` (locked default — that's fine, root `build` runs `deploy:api`) |
    | Output directory | leave blank — only needed for static frontends |
    | Entry file | `apps/api/dist/main.js` |
    | Domain | assign a subdomain, e.g. `api.yourdomain.com` |
