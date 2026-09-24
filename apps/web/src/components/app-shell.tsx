@@ -25,6 +25,7 @@ import { io } from "socket.io-client";
 import { SocketContext } from "@/components/realtime";
 import { Skeleton } from "@/components/skeleton";
 import { api, API_URL, ApiError } from "@/lib/api";
+import { roleDescriptor } from "@/lib/roles";
 import type { AuthContext } from "@/lib/types";
 
 const navigation = [
@@ -238,7 +239,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <header className="flex items-center justify-between border-b border-border bg-white px-6 py-4 lg:px-10">
           <div>
             <p className="text-sm font-semibold text-primary-strong">{user.fullName}</p>
-            <p className="text-xs text-muted">{user.roleKeys.join(", ")}</p>
+            <p className="flex items-center gap-1.5 text-xs text-muted">
+              <span>Role :</span>
+              {user.roleKeys.length ? (
+                user.roleKeys.map((key, index) => {
+                  const { label, Icon } = roleDescriptor(key);
+                  return (
+                    <span className="inline-flex items-center gap-1" key={key}>
+                      {index > 0 ? <span aria-hidden="true">,</span> : null}
+                      {label}
+                      <Icon aria-hidden="true" className="text-primary" size={12} weight="bold" />
+                    </span>
+                  );
+                })
+              ) : (
+                <span>Unassigned</span>
+              )}
+            </p>
           </div>
           <button
             className="group flex cursor-pointer items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm font-semibold text-primary-strong transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-700"
