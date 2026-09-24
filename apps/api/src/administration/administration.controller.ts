@@ -113,7 +113,19 @@ export class AdministrationController {
 
   @Get("audit-events")
   @RequirePermissions("audit.view")
-  listAuditEvents(@Query("take") take?: string) {
-    return this.administration.listAuditEvents(Number(take ?? 100));
+  listAuditEvents(
+    @Query("page") page?: string,
+    @Query("pageSize") pageSize?: string,
+    @Query("search") search?: string,
+    @Query("action") action?: string,
+    @Query("targetType") targetType?: string,
+  ) {
+    return this.administration.listAuditEvents({
+      page: page ? Number(page) : undefined,
+      pageSize: pageSize ? Number(pageSize) : undefined,
+      search,
+      action,
+      targetType,
+    });
   }
 }

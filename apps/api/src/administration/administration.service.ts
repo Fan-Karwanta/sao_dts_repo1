@@ -1,7 +1,10 @@
 import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { Prisma } from "@sao/db";
 import { AuditService } from "../audit/audit.service.js";
 import type { AuthContext } from "../common/auth-context.js";
 import { DatabaseService } from "../database/database.service.js";
+
+const AUDIT_PAGE_SIZES = [10, 50, 100];
 
 @Injectable()
 export class AdministrationService {
@@ -61,17 +64,76 @@ export class AdministrationService {
     });
   }
 
-  listAuditEvents(take = 100) {
-    return this.database.auditEvent.findMany({
-      take: Math.min(Math.max(take, 1), 500),
-      include: {
-        actor: { select: { publicId: true, fullName: true, username: true } },
-        effectiveActor: {
-          select: { publicId: true, fullName: true, username: true },
+  async listAuditEvents(input: {
+    page?: number | undefined;
+    pageSize?: number | undefined;
+    search?: string | undefined;
+    action?: string | undefined;
+    targetType?: string | undefined;
+  }) {
+    const pageSize = AUDIT_PAGE_SIZES.includes(Number(input.pageSize))
+      ? Number(input.pageSize)
+      : 10;
+    const where: Prisma.AuditEventWhereInput = {};
+    if (input.action) where.action = input.action;
+    if (input.targetType) where.targetType = input.targetType;
+    const search = input.search?.trim();
+    if (search) {
+      const contains: Prisma.StringFilter = {
+        contains: search,
+        mode: "insensitive",
+      };
+      const actorMatch = {
+        is: { OR: [{ fullName: contains }, { username: contains }] },
+      };
+      where.OR = [
+        { action: contains },
+        { targetType: contains },
+        { targetId: contains },
+        { actor: actorMatch },
+        { effectiveActor: actorMatch },
+      ];
+    }
+    const total = await this.database.auditEvent.count({ where });
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const requested = Number(input.page);
+    const page = Math.min(
+      Number.isFinite(requested) && requested > 0 ? Math.floor(requested) : 1,
+      totalPages,
+    );
+    const [items, actions, targetTypes] = await Promise.all([
+      this.database.auditEvent.findMany({
+        where,
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: {
+          actor: { select: { publicId: true, fullName: true, username: true } },
+          effectiveActor: {
+            select: { publicId: true, fullName: true, username: true },
+          },
         },
-      },
-      orderBy: { occurredAt: "desc" },
-    });
+        orderBy: { occurredAt: "desc" },
+      }),
+      this.database.auditEvent.findMany({
+        distinct: ["action"],
+        select: { action: true },
+        orderBy: { action: "asc" },
+      }),
+      this.database.auditEvent.findMany({
+        distinct: ["targetType"],
+        select: { targetType: true },
+        orderBy: { targetType: "asc" },
+      }),
+    ]);
+    return {
+      items,
+      total,
+      page,
+      pageSize,
+      totalPages,
+      actions: actions.map((row) => row.action),
+      targetTypes: targetTypes.map((row) => row.targetType),
+    };
   }
 
   async updateUserStatus(

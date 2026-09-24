@@ -14,6 +14,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { DocumentSheet } from "@/components/document-sheet";
+import { Skeleton } from "@/components/skeleton";
 import { api } from "@/lib/api";
 import type { AuthContext, WorkflowNode } from "@/lib/types";
 
@@ -69,7 +70,40 @@ export default function DocumentDetailPage() {
     onSuccess: refresh,
   });
 
-  if (document.isLoading) return <p className="text-muted">Loading document…</p>;
+  if (document.isLoading) {
+    return (
+      <div aria-busy="true" aria-label="Loading document" className="mx-auto max-w-7xl">
+        <Skeleton className="h-3.5 w-24" />
+        <Skeleton className="mt-4 h-4 w-32" />
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <Skeleton className="h-9 w-72" />
+          <Skeleton className="h-6 w-20 rounded-full" />
+        </div>
+        <Skeleton className="mt-3 h-4 w-48" />
+        <Skeleton className="mt-8 h-[380px] rounded-2xl border border-border bg-white" />
+        <div className="mt-8 grid gap-6 xl:grid-cols-2">
+          {[0, 1].map((section) => (
+            <section className="rounded-2xl border border-border bg-white" key={section}>
+              <div className="border-b border-border px-5 py-4">
+                <Skeleton className="h-4 w-40" />
+              </div>
+              <div className="divide-y divide-border">
+                {Array.from({ length: 3 }, (_, index) => (
+                  <div className="flex gap-3 px-5 py-4" key={index}>
+                    <Skeleton className="size-9 shrink-0 rounded-lg" />
+                    <div className="min-w-0 flex-1">
+                      <Skeleton className="h-3.5 w-3/4" />
+                      <Skeleton className="mt-2 h-3 w-1/2" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      </div>
+    );
+  }
   if (!document.data) return <p className="text-red-700">Unable to load this document.</p>;
 
   const data = document.data;

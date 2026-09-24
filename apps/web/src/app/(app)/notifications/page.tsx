@@ -9,6 +9,7 @@ import {
   UserPlus,
 } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Skeleton } from "@/components/skeleton";
 import { api } from "@/lib/api";
 
 interface Notification {
@@ -91,7 +92,23 @@ export default function NotificationsPage() {
               </button>
             );
           })}
-          {!notifications.data?.length ? (
+          {notifications.isLoading
+            ? Array.from({ length: 5 }, (_, index) => (
+                <div className="px-5 py-4" key={index}>
+                  <div className="flex gap-4">
+                    <Skeleton className="size-10 shrink-0 rounded-xl" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-4">
+                        <Skeleton className="h-4 w-1/2" />
+                        <Skeleton className="h-3 w-24 shrink-0" />
+                      </div>
+                      <Skeleton className="mt-2 h-3.5 w-3/4" />
+                    </div>
+                  </div>
+                </div>
+              ))
+            : null}
+          {!notifications.isLoading && !notifications.data?.length ? (
             <div className="p-12 text-center">
               <BellSlash className="mx-auto text-muted" size={36} />
               <p className="mt-3 text-sm text-muted">No notifications.</p>

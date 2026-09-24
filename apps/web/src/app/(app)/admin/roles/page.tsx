@@ -2,6 +2,7 @@
 
 import { LockSimple, ShieldCheck } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Skeleton } from "@/components/skeleton";
 import { api } from "@/lib/api";
 
 interface Permission {
@@ -47,6 +48,13 @@ export default function RolesPage() {
           <thead className="bg-primary-strong text-white">
             <tr>
               <th className="sticky left-0 bg-primary-strong px-4 py-3">Permission</th>
+              {roles.isLoading
+                ? Array.from({ length: 4 }, (_, index) => (
+                    <th className="min-w-40 px-4 py-3" key={index}>
+                      <Skeleton className="mx-auto h-4 w-20" onDark />
+                    </th>
+                  ))
+                : null}
               {roles.data?.map((role) => (
                 <th className="min-w-40 px-4 py-3 text-center" key={role.id}>
                   <span className="inline-flex items-center gap-1.5">
@@ -58,7 +66,21 @@ export default function RolesPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {permissions.data?.map((permission) => (
+            {roles.isLoading || permissions.isLoading
+              ? Array.from({ length: 8 }, (_, index) => (
+                  <tr key={index}>
+                    <td className="sticky left-0 bg-white px-4 py-3">
+                      <Skeleton className="h-3.5 w-40" />
+                    </td>
+                    {Array.from({ length: 4 }, (_, cell) => (
+                      <td className="px-4 py-3" key={cell}>
+                        <Skeleton className="mx-auto size-4 rounded" />
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              : null}
+            {!roles.isLoading && permissions.data?.map((permission) => (
               <tr key={permission.id}>
                 <td className="sticky left-0 bg-white px-4 py-3 font-mono text-xs">{permission.key}</td>
                 {roles.data?.map((role) => {

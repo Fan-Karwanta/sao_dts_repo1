@@ -13,6 +13,7 @@ import {
 } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { Skeleton } from "@/components/skeleton";
 import { api } from "@/lib/api";
 import type { Department } from "@/lib/types";
 
@@ -173,7 +174,24 @@ export default function UsersPage() {
               </div>
             </div>
           ))}
-          {!registrations.data?.length ? <p className="p-5 text-sm text-muted">No pending requests.</p> : null}
+          {registrations.isLoading
+            ? Array.from({ length: 2 }, (_, index) => (
+                <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4" key={index}>
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="size-10 shrink-0 rounded-full" />
+                    <div>
+                      <Skeleton className="h-4 w-36" />
+                      <Skeleton className="mt-2 h-3 w-48" />
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Skeleton className="h-9 w-24 rounded-lg" />
+                    <Skeleton className="h-9 w-20 rounded-lg" />
+                  </div>
+                </div>
+              ))
+            : null}
+          {!registrations.isLoading && !registrations.data?.length ? <p className="p-5 text-sm text-muted">No pending requests.</p> : null}
         </div>
       </section>
 
@@ -183,6 +201,30 @@ export default function UsersPage() {
             <tr><th className="px-4 py-3">User</th><th className="px-4 py-3">Access</th><th className="px-4 py-3">Assign role</th><th className="px-4 py-3">Actions</th></tr>
           </thead>
           <tbody className="divide-y divide-border">
+            {users.isLoading
+              ? Array.from({ length: 5 }, (_, index) => (
+                  <tr key={index}>
+                    <td className="px-4 py-4">
+                      <div className="flex items-center gap-3">
+                        <Skeleton className="size-9 shrink-0 rounded-full" />
+                        <div>
+                          <Skeleton className="h-3.5 w-36" />
+                          <Skeleton className="mt-2 h-3 w-44" />
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-4"><Skeleton className="h-3.5 w-40" /></td>
+                    <td className="px-4 py-4"><Skeleton className="h-9 w-52 rounded-lg" /></td>
+                    <td className="px-4 py-4">
+                      <div className="flex gap-2">
+                        <Skeleton className="h-9 w-20 rounded-lg" />
+                        <Skeleton className="h-9 w-28 rounded-lg" />
+                        <Skeleton className="h-9 w-32 rounded-lg" />
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              : null}
             {users.data?.map((user) => (
               <tr key={user.id}>
                 <td className="px-4 py-4">

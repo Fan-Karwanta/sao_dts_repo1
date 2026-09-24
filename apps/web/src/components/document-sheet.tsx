@@ -8,7 +8,6 @@ import {
   MagnifyingGlass,
   PencilSimple,
   Plus,
-  SpinnerGap,
   Tray,
   WarningCircle,
   X,
@@ -1282,7 +1281,35 @@ export function DocumentSheet({ documentId }: { documentId?: string }) {
             </tr>
           </thead>
           <tbody>
-            {rows.map((row, index) => (
+            {documents.isLoading || published.isLoading
+              ? Array.from({ length: 12 }, (_, index) => (
+                  <tr key={index}>
+                    <th
+                      className="sticky left-0 z-[6] border-b border-r text-center text-[11px] font-normal"
+                      scope="row"
+                      style={{ borderColor: GRID_LINE, background: HEADER_BG, color: "#5f6368" }}
+                    >
+                      {index + 1}
+                    </th>
+                    {allColumns.map((column, col) => (
+                      <td
+                        className={`h-6 border-b border-r px-1.5 align-middle ${col < 2 ? "sticky z-[5] bg-white" : ""}`}
+                        key={column.key}
+                        style={{
+                          borderColor: GRID_LINE,
+                          left: col < 2 ? stickyLeft[col] : undefined,
+                          boxShadow: col === 1 ? "2px 0 0 0 #c4c7c5" : undefined,
+                        }}
+                      >
+                        <div
+                          className="h-3 animate-pulse rounded"
+                          style={{ background: "#e8eaed", width: `${45 + ((index * 11 + col * 17) % 45)}%` }}
+                        />
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              : rows.map((row, index) => (
               <SheetRowView
                 canEditColumn={canEditColumn}
                 columns={columns}
@@ -1304,12 +1331,7 @@ export function DocumentSheet({ documentId }: { documentId?: string }) {
             ))}
           </tbody>
         </table>
-        {documents.isLoading || published.isLoading ? (
-          <p className="flex items-center justify-center gap-2 p-8 text-center text-[13px] text-muted">
-            <SpinnerGap className="animate-spin" size={16} />
-            Loading sheet…
-          </p>
-        ) : !rows.length ? (
+        {!documents.isLoading && !published.isLoading && !rows.length ? (
           <p className="flex items-center justify-center gap-2 p-8 text-center text-[13px] text-muted">
             <Tray size={16} />
             {documentId

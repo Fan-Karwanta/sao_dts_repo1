@@ -2,6 +2,7 @@
 
 import { AppWindow, SquaresFour } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Skeleton } from "@/components/skeleton";
 import { api } from "@/lib/api";
 
 interface Feature {
@@ -35,6 +36,20 @@ export default function FeaturesPage() {
       <h1 className="mt-2 text-3xl font-semibold tracking-tight text-primary-strong">Page management</h1>
       <p className="mt-2 text-muted">Enable or disable modules without changing backend authorization.</p>
       <section className="mt-8 divide-y divide-border overflow-hidden rounded-2xl border border-border bg-white">
+        {features.isLoading
+          ? Array.from({ length: 5 }, (_, index) => (
+              <div className="flex items-center justify-between gap-4 px-5 py-4" key={index}>
+                <div className="flex items-center gap-3">
+                  <Skeleton className="size-10 shrink-0 rounded-xl" />
+                  <div>
+                    <Skeleton className="h-4 w-36" />
+                    <Skeleton className="mt-2 h-3 w-24" />
+                  </div>
+                </div>
+                <Skeleton className="h-7 w-12 rounded-full" />
+              </div>
+            ))
+          : null}
         {features.data?.map((feature) => (
           <div className="flex items-center justify-between gap-4 px-5 py-4" key={feature.id}>
             <div className="flex items-center gap-3">

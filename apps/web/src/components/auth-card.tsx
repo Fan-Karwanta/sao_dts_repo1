@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 
 export function AuthCard({
@@ -14,12 +15,25 @@ export function AuthCard({
   children: React.ReactNode;
 }) {
   return (
-    <main className="grid min-h-screen place-items-center bg-background p-4">
-      <section className="w-full max-w-lg rounded-3xl border border-border bg-white p-7 shadow-[0_24px_80px_rgba(17,53,32,0.12)] sm:p-10">
+    <main className="relative grid min-h-screen place-items-center p-4">
+      <Image
+        src="/dogh_background.jpg"
+        alt=""
+        fill
+        priority
+        sizes="100vw"
+        className="object-cover"
+      />
+      <div className="absolute inset-0 bg-black/45" aria-hidden="true" />
+      <section className="relative w-full max-w-lg rounded-3xl border border-border bg-white p-7 shadow-[0_24px_80px_rgba(17,53,32,0.12)] sm:p-10">
         <div className="mb-8 flex items-center gap-3">
-          <div className="grid size-12 place-items-center rounded-2xl bg-accent font-black text-primary-strong">
-            SAO
-          </div>
+          <Image
+            src="/dogh_logo.png"
+            alt="Davao Occidental General Hospital logo"
+            width={48}
+            height={48}
+            className="size-12 rounded-2xl object-cover"
+          />
           <div>
             <p className="font-semibold text-primary-strong">SAO Document Tracker</p>
             <p className="text-xs text-muted">Secure and organized monitoring</p>

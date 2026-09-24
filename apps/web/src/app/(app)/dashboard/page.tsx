@@ -12,6 +12,7 @@ import {
 } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
+import { Skeleton } from "@/components/skeleton";
 import { api } from "@/lib/api";
 import type { DocumentListItem } from "@/lib/types";
 
@@ -80,7 +81,11 @@ export default function DashboardPage() {
             </span>
             <div>
               <p className="text-sm text-muted">{label}</p>
-              <p className="mt-1 text-3xl font-semibold text-primary-strong">{value}</p>
+              {documents.isLoading ? (
+                <Skeleton className="mt-2 h-8 w-14" />
+              ) : (
+                <p className="mt-1 text-3xl font-semibold text-primary-strong">{value}</p>
+              )}
             </div>
           </article>
         ))}
@@ -116,6 +121,23 @@ export default function DashboardPage() {
               </div>
             </Link>
           ))}
+          {documents.isLoading
+            ? Array.from({ length: 5 }, (_, index) => (
+                <div className="flex items-center justify-between gap-4 px-5 py-4" key={index}>
+                  <div className="flex min-w-0 items-center gap-3">
+                    <Skeleton className="size-10 shrink-0 rounded-xl" />
+                    <div>
+                      <Skeleton className="h-3.5 w-36" />
+                      <Skeleton className="mt-2 h-3 w-52" />
+                    </div>
+                  </div>
+                  <div className="shrink-0">
+                    <Skeleton className="ml-auto h-3.5 w-28" />
+                    <Skeleton className="mt-2 h-3 w-36" />
+                  </div>
+                </div>
+              ))
+            : null}
           {!data.length && !documents.isLoading ? (
             <div className="px-5 py-12 text-center">
               <FolderOpen className="mx-auto text-muted" size={36} />
