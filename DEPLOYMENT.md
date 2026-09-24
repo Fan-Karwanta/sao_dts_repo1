@@ -20,7 +20,7 @@ Important caveats (be aware before going live):
 
 - `apps/api/src/auth/auth.controller.ts` — session cookie uses `SameSite=None` in production (required: `vercel.app` ↔ Hostinger domain are different sites; `Strict` cookies would never be sent and login would break). `Secure` is already on in production and both hosts use HTTPS.
 - `apps/api/src/main.ts` — listens on `PORT` (injected by the host) with `API_PORT` fallback for local dev.
-- `package.json` — the root `build` script runs `deploy:api`, which generates the Prisma client then builds `@sao/contracts`, `@sao/db`, and `@sao/api` in dependency order via `npm -w`. Hostinger locks npm deploys to `npm run build`, so this is exactly what its build runs. Use `pnpm build:all` locally to build every package including the web app.
+- `package.json` — the root `build` script runs `deploy:api`, which generates the Prisma client, builds `@sao/contracts`, `@sao/db`, and `@sao/api` in dependency order via `npm -w`, then copies `apps/api/dist` **and** `node_modules` into a self-contained root `dist/` — Hostinger ships only the output directory to the runtime, so `node_modules` must be inside it. Hostinger locks npm deploys to `npm run build`, so this is exactly what its build runs. Use `pnpm build:all` locally to build every package including the web app.
 
 ---
 

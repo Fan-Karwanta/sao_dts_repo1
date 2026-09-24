@@ -22,7 +22,7 @@
     "db:migrate": "dotenv -e .env -- pnpm --filter @sao/db migrate:dev",
     "db:deploy": "dotenv -e .env -- pnpm --filter @sao/db migrate:deploy",
     "db:seed": "dotenv -e .env -- pnpm --filter @sao/db seed",
-    "deploy:api": "npm run build -w @sao/contracts && npm run generate -w @sao/db && npm run build -w @sao/db && npm run build -w @sao/api && node -e \"require('fs').cpSync('apps/api/dist','dist',{recursive:true})\""
+    "deploy:api": "npm run build -w @sao/contracts && npm run generate -w @sao/db && npm run build -w @sao/db && npm run build -w @sao/api && node -e \"const fs=require('fs');fs.cpSync('apps/api/dist','dist',{recursive:true});fs.cpSync('node_modules','dist/node_modules',{recursive:true})\""
   },
   "devDependencies": {
     "@eslint/js": "9.36.0",
