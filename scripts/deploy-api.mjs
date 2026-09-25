@@ -9,9 +9,14 @@ const moduleDirs = [
   "packages/db/node_modules",
   "packages/contracts/node_modules",
 ];
+const skipWorkspaceLinks = (src) => !src.includes("@sao");
 for (const dir of moduleDirs) {
   if (existsSync(dir))
-    cpSync(dir, "dist/vendor", { recursive: true, dereference: true });
+    cpSync(dir, "dist/vendor", {
+      recursive: true,
+      dereference: true,
+      filter: skipWorkspaceLinks,
+    });
 }
 
 mkdirSync("dist/vendor/@sao", { recursive: true });
