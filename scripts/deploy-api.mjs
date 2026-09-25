@@ -10,7 +10,8 @@ const moduleDirs = [
   "packages/contracts/node_modules",
 ];
 for (const dir of moduleDirs) {
-  if (existsSync(dir)) cpSync(dir, "dist/vendor", { recursive: true });
+  if (existsSync(dir))
+    cpSync(dir, "dist/vendor", { recursive: true, dereference: true });
 }
 
 mkdirSync("dist/vendor/@sao", { recursive: true });
