@@ -1,4 +1,4 @@
-import { cpSync, existsSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 
 rmSync("dist", { recursive: true, force: true });
 cpSync("apps/api/dist", "dist/app", { recursive: true });
@@ -12,6 +12,17 @@ const moduleDirs = [
 for (const dir of moduleDirs) {
   if (existsSync(dir)) cpSync(dir, "dist/vendor", { recursive: true });
 }
+
+mkdirSync("dist/vendor/@sao", { recursive: true });
+const skipNestedModules = (src) => !src.includes("node_modules");
+cpSync("packages/contracts", "dist/vendor/@sao/contracts", {
+  recursive: true,
+  filter: skipNestedModules,
+});
+cpSync("packages/db", "dist/vendor/@sao/db", {
+  recursive: true,
+  filter: skipNestedModules,
+});
 
 writeFileSync(
   "dist/main.js",
