@@ -13,6 +13,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { useEffect, useState, type ReactNode } from "react";
 import { DocumentSheet } from "@/components/document-sheet";
 import { Skeleton } from "@/components/skeleton";
 import { api } from "@/lib/api";
@@ -24,10 +25,12 @@ interface DocumentDetail {
   title: string;
   status: string;
   currentNode: WorkflowNode | null;
+  workflowVersion: { nodes: WorkflowNode[] };
   movements: Array<{
     id: string;
     type: string;
     reason: string | null;
+    metadata: Record<string, unknown> | null;
     occurredAt: string;
     fromNode: WorkflowNode | null;
     toNode: WorkflowNode | null;
@@ -58,16 +61,29 @@ export default function DocumentDetailPage() {
     await queryClient.invalidateQueries({ queryKey: ["documents", id] });
     await queryClient.invalidateQueries({ queryKey: ["documents"] });
   };
+  const [resolveTarget, setResolveTarget] = useState<string | null>(null);
+  const [showReroute, setShowReroute] = useState(false);
   const resolveConcern = useMutation({
-    mutationFn: (concernId: string) => {
-      const resolution = window.prompt("How was this concern resolved?");
-      if (!resolution) throw new Error("A resolution note is required");
-      return api(`/documents/concerns/${concernId}/resolve`, {
+    mutationFn: (input: { concernId: string; resolution: string }) =>
+      api(`/documents/concerns/${input.concernId}/resolve`, {
         method: "POST",
-        body: JSON.stringify({ resolution }),
-      });
+        body: JSON.stringify({ resolution: input.resolution }),
+      }),
+    onSuccess: async () => {
+      setResolveTarget(null);
+      await refresh();
     },
-    onSuccess: refresh,
+  });
+  const reroute = useMutation({
+    mutationFn: (input: { targetNodeId: string; reason: string }) =>
+      api(`/documents/${id}/reroute`, {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    onSuccess: async () => {
+      setShowReroute(false);
+      await refresh();
+    },
   });
 
   if (document.isLoading) {
@@ -108,6 +124,7 @@ export default function DocumentDetailPage() {
 
   const data = document.data;
   const canResolve = auth.data?.user.permissionKeys.includes("documents.fields.edit") ?? false;
+  const canReroute = auth.data?.user.permissionKeys.includes("documents.reroute") ?? false;
   const statusTone =
     data.status === "RETURNED"
       ? "bg-amber-100 text-amber-900"
@@ -141,14 +158,28 @@ export default function DocumentDetailPage() {
               {data.status}
             </span>
           </div>
-          <p className="mt-2 text-sm text-muted">
-            Current step: <strong>{data.currentNode?.label ?? data.status}</strong>
-          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-muted">
+            <span>
+              Current step: <strong>{data.currentNode?.label ?? data.status}</strong>
+            </span>
+            {canReroute ? (
+              <button
+                className="flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-xs font-semibold text-primary-strong transition hover:bg-background"
+                onClick={() => setShowReroute(true)}
+                type="button"
+              >
+                <GitBranch size={12} />
+                Reroute
+              </button>
+            ) : null}
+          </div>
         </div>
       </div>
 
-      {resolveConcern.error ? (
-        <p className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{resolveConcern.error.message}</p>
+      {resolveConcern.error || reroute.error ? (
+        <p className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">
+          {(resolveConcern.error ?? reroute.error)?.message}
+        </p>
       ) : null}
 
       <section className="mt-8">
@@ -168,7 +199,10 @@ export default function DocumentDetailPage() {
                   </span>
                   <div className="min-w-0">
                     <p className="font-medium text-primary-strong">
-                      {movement.type}: {movement.fromNode?.label ?? "Created"} → {movement.toNode?.label}
+                      {movement.type === "RETURN" && movement.metadata?.edgeType === "EXCEPTION"
+                        ? "EXCEPTION"
+                        : movement.type}
+                      : {movement.fromNode?.label ?? "Created"} → {movement.toNode?.label}
                     </p>
                     <p className="mt-1 text-muted">
                       {movement.actor.fullName} · {new Date(movement.occurredAt).toLocaleString()}
@@ -197,7 +231,7 @@ export default function DocumentDetailPage() {
                         <button
                           className="flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-xs font-semibold text-primary-strong transition hover:bg-background disabled:opacity-60"
                           disabled={resolveConcern.isPending}
-                          onClick={() => resolveConcern.mutate(concern.id)}
+                          onClick={() => setResolveTarget(concern.id)}
                           type="button"
                         >
                           <CheckCircle size={12} />
@@ -220,6 +254,215 @@ export default function DocumentDetailPage() {
           </div>
         </section>
       </div>
+
+      {resolveTarget ? (
+        <ReasonDialog
+          description="Record how this concern was resolved."
+          icon={<CheckCircle size={20} weight="bold" />}
+          iconTone="bg-emerald-50 text-emerald-600"
+          minLength={2}
+          onCancel={() => setResolveTarget(null)}
+          onSubmit={(resolution) => resolveConcern.mutate({ concernId: resolveTarget, resolution })}
+          pending={resolveConcern.isPending}
+          placeholder="How was this concern resolved?"
+          submitLabel="Resolve concern"
+          title="Resolve concern"
+        />
+      ) : null}
+
+      {showReroute ? (
+        <RerouteDialog
+          currentNodeId={data.currentNode?.id ?? null}
+          nodes={data.workflowVersion.nodes}
+          onCancel={() => setShowReroute(false)}
+          onSubmit={(targetNodeId, reason) => reroute.mutate({ targetNodeId, reason })}
+          pending={reroute.isPending}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function ReasonDialog({
+  description,
+  icon,
+  iconTone,
+  minLength,
+  onCancel,
+  onSubmit,
+  pending,
+  placeholder,
+  submitLabel,
+  title,
+}: {
+  description: string;
+  icon: ReactNode;
+  iconTone: string;
+  minLength: number;
+  onCancel: () => void;
+  onSubmit: (value: string) => void;
+  pending: boolean;
+  placeholder: string;
+  submitLabel: string;
+  title: string;
+}) {
+  const [value, setValue] = useState("");
+  const valid = value.trim().length >= minLength;
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onCancel();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onCancel]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <button
+        aria-label={`Close ${title}`}
+        className="absolute inset-0 cursor-default bg-primary-strong/40 backdrop-blur-sm"
+        onClick={onCancel}
+        type="button"
+      />
+      <form
+        aria-modal="true"
+        className="relative w-full max-w-md rounded-2xl border border-border bg-white p-6 shadow-2xl"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (valid && !pending) onSubmit(value.trim());
+        }}
+        role="dialog"
+      >
+        <div className={`flex size-11 items-center justify-center rounded-xl ${iconTone}`}>{icon}</div>
+        <h2 className="mt-4 text-base font-semibold text-primary-strong">{title}</h2>
+        <p className="mt-1 text-sm text-muted">{description}</p>
+        <textarea
+          autoFocus
+          className="mt-4 min-h-24 w-full rounded-lg border border-border p-3 text-sm"
+          maxLength={1000}
+          onChange={(event) => setValue(event.target.value)}
+          placeholder={placeholder}
+          value={value}
+        />
+        <div className="mt-6 flex justify-end gap-2">
+          <button
+            className="cursor-pointer rounded-xl border border-border px-4 py-2 text-sm font-semibold text-primary-strong transition hover:bg-background"
+            onClick={onCancel}
+            type="button"
+          >
+            Cancel
+          </button>
+          <button
+            className="cursor-pointer rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-strong disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={!valid || pending}
+            type="submit"
+          >
+            {submitLabel}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function RerouteDialog({
+  currentNodeId,
+  nodes,
+  onCancel,
+  onSubmit,
+  pending,
+}: {
+  currentNodeId: string | null;
+  nodes: WorkflowNode[];
+  onCancel: () => void;
+  onSubmit: (targetNodeId: string, reason: string) => void;
+  pending: boolean;
+}) {
+  const [targetNodeId, setTargetNodeId] = useState("");
+  const [reason, setReason] = useState("");
+  const valid = targetNodeId !== "" && reason.trim().length >= 5;
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onCancel();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onCancel]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <button
+        aria-label="Close reroute dialog"
+        className="absolute inset-0 cursor-default bg-primary-strong/40 backdrop-blur-sm"
+        onClick={onCancel}
+        type="button"
+      />
+      <form
+        aria-modal="true"
+        className="relative w-full max-w-md rounded-2xl border border-border bg-white p-6 shadow-2xl"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (valid && !pending) onSubmit(targetNodeId, reason.trim());
+        }}
+        role="dialog"
+      >
+        <div className="flex size-11 items-center justify-center rounded-xl bg-sky-50 text-sky-600">
+          <GitBranch size={20} weight="bold" />
+        </div>
+        <h2 className="mt-4 text-base font-semibold text-primary-strong">Reroute document</h2>
+        <p className="mt-1 text-sm text-muted">
+          Move this document to any step in its workflow, bypassing the normal transitions. This is
+          recorded as a reroute and the target department is notified.
+        </p>
+        <label className="mt-4 grid gap-2 text-sm font-medium text-primary-strong">
+          Target step
+          <select
+            className="h-10 rounded-lg border border-border px-3 font-normal"
+            onChange={(event) => setTargetNodeId(event.target.value)}
+            value={targetNodeId}
+          >
+            <option value="">Select a step</option>
+            {nodes
+              .filter((node) => node.id !== currentNodeId)
+              .map((node) => (
+                <option key={node.id} value={node.id}>
+                  {node.label}
+                </option>
+              ))}
+          </select>
+        </label>
+        <label className="mt-4 grid gap-2 text-sm font-medium text-primary-strong">
+          Reason
+          <textarea
+            className="min-h-24 rounded-lg border border-border p-3 text-sm font-normal"
+            maxLength={1000}
+            onChange={(event) => setReason(event.target.value)}
+            placeholder="Why is this document being rerouted?"
+            value={reason}
+          />
+        </label>
+        <p className="mt-1 text-xs text-muted">
+          {valid ? "" : "A target step and a reason of at least 5 characters are required."}
+        </p>
+        <div className="mt-6 flex justify-end gap-2">
+          <button
+            className="cursor-pointer rounded-xl border border-border px-4 py-2 text-sm font-semibold text-primary-strong transition hover:bg-background"
+            onClick={onCancel}
+            type="button"
+          >
+            Cancel
+          </button>
+          <button
+            className="cursor-pointer rounded-xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={!valid || pending}
+            type="submit"
+          >
+            {pending ? "Rerouting…" : "Reroute"}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

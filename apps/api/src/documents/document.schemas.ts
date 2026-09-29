@@ -20,6 +20,11 @@ export const returnDocumentSchema = z.object({
   reason: z.string().trim().min(5).max(1000),
 });
 
+export const rerouteDocumentSchema = z.object({
+  targetNodeId: z.string().uuid(),
+  reason: z.string().trim().min(5).max(1000),
+});
+
 export const resolveConcernSchema = z.object({
   resolution: z.string().trim().min(2).max(1000),
 });

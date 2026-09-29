@@ -11,7 +11,8 @@
     "migrate:dev": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
     "seed": "tsx prisma/seed.ts",
-    "lint": "eslint src prisma/seed.ts --max-warnings=0",
+    "backfill:return-edges": "tsx prisma/backfill-return-edges.ts",
+    "lint": "eslint src prisma --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
   },

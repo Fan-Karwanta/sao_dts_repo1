@@ -5,6 +5,7 @@ import { parseBody } from "../common/validation.js";
 import {
   createDocumentSchema,
   moveDocumentSchema,
+  rerouteDocumentSchema,
   resolveConcernSchema,
   returnDocumentSchema,
   updateFieldSchema,
@@ -71,6 +72,17 @@ export class DocumentController {
   ) {
     const input = parseBody(returnDocumentSchema, body);
     return this.documents.move(context, id, input.targetNodeId, input.reason, true);
+  }
+
+  @Post(":id/reroute")
+  @RequirePermissions("documents.reroute")
+  rerouteDocument(
+    @CurrentAuth() context: AuthContext,
+    @Param("id") id: string,
+    @Body() body: unknown,
+  ) {
+    const input = parseBody(rerouteDocumentSchema, body);
+    return this.documents.reroute(context, id, input.targetNodeId, input.reason);
   }
 
   @Post("concerns/:id/resolve")

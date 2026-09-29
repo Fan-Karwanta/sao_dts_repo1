@@ -263,6 +263,16 @@ async function main() {
         type: "FORWARD",
       })),
     });
+    await database.workflowEdge.createMany({
+      data: nodes.slice(1, -1).map((node, index) => ({
+        workflowVersionId: version.id,
+        sourceNodeId: node.id,
+        targetNodeId: nodes[index]!.id,
+        type: "RETURN" as const,
+        label: "Return to previous step",
+      })),
+      skipDuplicates: true,
+    });
     const returnTargets = [1, 9, 12, 19].map((step) => nodes[step]!);
     await database.workflowEdge.createMany({
       data: [26, 27].flatMap((step) =>

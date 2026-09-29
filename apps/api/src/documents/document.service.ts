@@ -311,6 +311,7 @@ export class DocumentService {
           toNodeId: targetNodeId,
           actorId: context.user.id,
           reason: reason ?? null,
+          metadata: { edgeType: edge.type },
         },
       });
       if (isReturn && reason) {
@@ -343,6 +344,70 @@ export class DocumentService {
       isReturn ? "document.returned" : "document.moved",
       { id: randomUUID(), entityId: documentId, version: updated.version, targetNodeId },
     );
+    return this.get(documentId);
+  }
+
+  async reroute(
+    context: AuthContext,
+    documentId: string,
+    targetNodeId: string,
+    reason: string,
+  ) {
+    const document = await this.database.documentRecord.findUnique({
+      where: { id: documentId },
+    });
+    if (!document) throw new NotFoundException("Document not found");
+    const targetNode = await this.database.workflowNode.findUnique({
+      where: { id: targetNodeId },
+    });
+    if (!targetNode || targetNode.workflowVersionId !== document.workflowVersionId) {
+      throw new NotFoundException("Target step not found in this document's workflow");
+    }
+    if (targetNodeId === document.currentNodeId) {
+      throw new ConflictException("The document is already at this step");
+    }
+
+    const updated = await this.database.$transaction(async (transaction) => {
+      const next = await transaction.documentRecord.update({
+        where: { id: documentId },
+        data: {
+          currentNodeId: targetNodeId,
+          status: targetNode.type === "END" ? "COMPLETED" : "ACTIVE",
+          completedAt: targetNode.type === "END" ? new Date() : null,
+          version: { increment: 1 },
+        },
+      });
+      await transaction.documentMovement.create({
+        data: {
+          documentId,
+          type: "REROUTE",
+          fromNodeId: document.currentNodeId,
+          toNodeId: targetNodeId,
+          actorId: context.user.id,
+          reason,
+        },
+      });
+      return next;
+    });
+    await this.audit.record(context, {
+      action: "document.rerouted",
+      targetType: "DocumentRecord",
+      targetId: documentId,
+      before: { nodeId: document.currentNodeId, status: document.status },
+      after: { nodeId: targetNodeId, status: updated.status, reason },
+    });
+    await this.notifyTargetDepartment(
+      documentId,
+      targetNodeId,
+      "Document rerouted",
+      `${document.referenceNumber}: ${document.title}`,
+    );
+    this.realtime.emitToDocument(documentId, "document.rerouted", {
+      id: randomUUID(),
+      entityId: documentId,
+      version: updated.version,
+      targetNodeId,
+    });
     return this.get(documentId);
   }
 

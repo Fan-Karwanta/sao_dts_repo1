@@ -422,6 +422,11 @@ export function DocumentSheet({ documentId }: { documentId?: string }) {
   const [presence, setPresence] = useState(new Map<string, Viewer>());
   const [widths, setWidths] = useState<Record<string, number>>(loadWidths);
   const [showCreate, setShowCreate] = useState(false);
+  const [returnIntent, setReturnIntent] = useState<{
+    documentId: string;
+    reference: string;
+    edge: WorkflowEdge;
+  } | null>(null);
 
   const user = auth.data?.user;
   const columns = useMemo(() => buildColumns(published.data?.nodes ?? []), [published.data]);
@@ -584,16 +589,15 @@ export function DocumentSheet({ documentId }: { documentId?: string }) {
   });
 
   const move = useMutation({
-    mutationFn: (input: { documentId: string; edge: WorkflowEdge }) => {
+    mutationFn: (input: { documentId: string; edge: WorkflowEdge; reason?: string }) => {
       const isReturn = input.edge.type === "RETURN" || input.edge.type === "EXCEPTION";
-      const reason = isReturn ? window.prompt("Describe the concern or return reason") : undefined;
-      if (isReturn && !reason) throw new Error("A return reason is required");
       return api(`/documents/${input.documentId}/${isReturn ? "return" : "move"}`, {
         method: "POST",
-        body: JSON.stringify({ targetNodeId: input.edge.targetNodeId, reason }),
+        body: JSON.stringify({ targetNodeId: input.edge.targetNodeId, reason: input.reason }),
       });
     },
     onSuccess: (_data, input) => {
+      setReturnIntent(null);
       void queryClient.invalidateQueries({ queryKey: ["documents"] });
       void queryClient.invalidateQueries({ queryKey: ["documents", input.documentId] });
     },
@@ -779,6 +783,7 @@ export function DocumentSheet({ documentId }: { documentId?: string }) {
     socket.on("document.field.updated", onField);
     socket.on("document.moved", onMoved);
     socket.on("document.returned", onMoved);
+    socket.on("document.rerouted", onMoved);
     socket.on("workflow.published", onPublished);
     socket.on("grid.presence", onPresence);
     socket.on("grid.presence.left", onLeft);
@@ -790,6 +795,7 @@ export function DocumentSheet({ documentId }: { documentId?: string }) {
       socket.off("document.field.updated", onField);
       socket.off("document.moved", onMoved);
       socket.off("document.returned", onMoved);
+      socket.off("document.rerouted", onMoved);
       socket.off("workflow.published", onPublished);
       socket.off("grid.presence", onPresence);
       socket.off("grid.presence.left", onLeft);
@@ -1080,7 +1086,18 @@ export function DocumentSheet({ documentId }: { documentId?: string }) {
                   } disabled:opacity-60`}
                   disabled={move.isPending}
                   key={edge.id}
-                  onClick={() => selRow && move.mutate({ documentId: selRow.doc.id, edge })}
+                  onClick={() => {
+                    if (!selRow) return;
+                    if (isReturn) {
+                      setReturnIntent({
+                        documentId: selRow.doc.id,
+                        reference: `${selRow.doc.referenceNumber} — ${selRow.doc.title}`,
+                        edge,
+                      });
+                    } else {
+                      move.mutate({ documentId: selRow.doc.id, edge });
+                    }
+                  }}
                   title={`${isReturn ? "Return to" : "Move to"} ${target}`}
                   type="button"
                 >
@@ -1343,6 +1360,19 @@ export function DocumentSheet({ documentId }: { documentId?: string }) {
         ) : null}
       </div>
 
+      {returnIntent ? (
+        <ReturnDialog
+          edge={returnIntent.edge}
+          pending={move.isPending}
+          reference={returnIntent.reference}
+          targetLabel={nodeById.get(returnIntent.edge.targetNodeId)?.label ?? "the previous step"}
+          onCancel={() => setReturnIntent(null)}
+          onSubmit={(reason) =>
+            move.mutate({ documentId: returnIntent.documentId, edge: returnIntent.edge, reason })
+          }
+        />
+      ) : null}
+
       {toast ? (
         <div
           className={`pointer-events-none fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-md px-4 py-2.5 text-[13px] shadow-lg ${
@@ -1354,6 +1384,102 @@ export function DocumentSheet({ documentId }: { documentId?: string }) {
           {toast.message}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function ReturnDialog({
+  edge,
+  pending,
+  reference,
+  targetLabel,
+  onCancel,
+  onSubmit,
+}: {
+  edge: WorkflowEdge;
+  pending: boolean;
+  reference: string;
+  targetLabel: string;
+  onCancel: () => void;
+  onSubmit: (reason: string) => void;
+}) {
+  const [reason, setReason] = useState("");
+  const isException = edge.type === "EXCEPTION";
+  const valid = reason.trim().length >= 5;
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onCancel();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onCancel]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <button
+        aria-label="Close return dialog"
+        className="absolute inset-0 cursor-default bg-primary-strong/40 backdrop-blur-sm"
+        onClick={onCancel}
+        type="button"
+      />
+      <form
+        aria-labelledby="return-dialog-title"
+        aria-modal="true"
+        className="relative w-full max-w-md rounded-2xl border border-border bg-white p-6 shadow-2xl"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (valid && !pending) onSubmit(reason.trim());
+        }}
+        role="dialog"
+      >
+        <div className="flex size-11 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+          <ArrowUUpLeft size={20} weight="bold" />
+        </div>
+        <h2 className="mt-4 text-base font-semibold text-primary-strong" id="return-dialog-title">
+          {isException ? "Return via exception" : "Return document"}
+        </h2>
+        <p className="mt-1 text-sm text-muted">
+          {reference} will move back to <strong>{targetLabel}</strong>.
+          {isException
+            ? " This is an out-of-band correction and will be recorded as an exception."
+            : edge.label
+              ? ` ${edge.label}.`
+              : ""}
+        </p>
+        <label className="mt-4 grid gap-2 text-sm font-medium text-primary-strong">
+          Reason
+          <textarea
+            autoFocus
+            className="min-h-24 rounded-lg border border-border p-3 text-sm font-normal"
+            maxLength={1000}
+            onChange={(event) => setReason(event.target.value)}
+            placeholder="Describe the clerical error or concern"
+            value={reason}
+          />
+        </label>
+        <p className="mt-1 text-xs text-muted">
+          {valid
+            ? "A concern with this reason will be opened at the destination step."
+            : "At least 5 characters are required."}
+        </p>
+        <div className="mt-6 flex justify-end gap-2">
+          <button
+            className="cursor-pointer rounded-xl border border-border px-4 py-2 text-sm font-semibold text-primary-strong transition hover:bg-background"
+            onClick={onCancel}
+            type="button"
+          >
+            Cancel
+          </button>
+          <button
+            className="cursor-pointer rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={!valid || pending}
+            type="submit"
+          >
+            {pending ? "Returning…" : "Return document"}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

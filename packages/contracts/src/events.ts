@@ -5,6 +5,7 @@ export const realtimeEventTypes = [
   "document.field.updated",
   "document.moved",
   "document.returned",
+  "document.rerouted",
   "workflow.published",
   "notification.created",
   "user.status.updated",
