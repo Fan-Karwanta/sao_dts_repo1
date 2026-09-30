@@ -462,15 +462,22 @@ export class AuthService {
     if (context.impersonationId) {
       throw new ForbiddenException("Exit impersonation before resetting passwords");
     }
+    const target = await this.database.user.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
+    if (!target) throw new NotFoundException("User not found");
     const temporaryPassword = `Aa1!${randomBytes(15).toString("base64url")}`;
+    const passwordHash = await this.hashPassword(temporaryPassword);
     const result = await this.database.$transaction(async (transaction) => {
-      const credential = await transaction.credential.update({
+      const credential = await transaction.credential.upsert({
         where: { userId },
-        data: {
-          passwordHash: await this.hashPassword(temporaryPassword),
+        update: {
+          passwordHash,
           passwordChangedAt: new Date(),
           mustChangePassword: true,
         },
+        create: { userId, passwordHash, mustChangePassword: true },
       });
       await transaction.session.updateMany({
         where: { userId },

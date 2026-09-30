@@ -61,7 +61,7 @@ function initials(name: string) {
 
 export default function UsersPage() {
   const queryClient = useQueryClient();
-  const [temporaryPassword, setTemporaryPassword] = useState("");
+  const [temporaryPassword, setTemporaryPassword] = useState<{ user: string; value: string } | null>(null);
   const users = useQuery({ queryKey: ["users"], queryFn: () => api<User[]>("/users") });
   const registrations = useQuery({
     queryKey: ["registration-requests"],
@@ -113,7 +113,14 @@ export default function UsersPage() {
         method: "POST",
         body: JSON.stringify({ userId }),
       }),
-    onSuccess: (result) => setTemporaryPassword(result.temporaryPassword),
+    onSuccess: (result, userId) => {
+      setTemporaryPassword({
+        user: users.data?.find((user) => user.id === userId)?.fullName ?? "user",
+        value: result.temporaryPassword,
+      });
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    },
+    onError: () => window.scrollTo({ top: 0, behavior: "smooth" }),
   });
 
   return (
@@ -125,10 +132,15 @@ export default function UsersPage() {
         <div className="mt-6 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
           <p className="flex items-center gap-2 font-semibold">
             <Key size={16} weight="bold" />
-            One-time temporary password
+            One-time temporary password for {temporaryPassword.user}
           </p>
-          <code className="mt-2 block select-all rounded-lg bg-white p-3">{temporaryPassword}</code>
+          <code className="mt-2 block select-all rounded-lg bg-white p-3">{temporaryPassword.value}</code>
           <p className="mt-2">Copy it now. It is not stored in recoverable form and the user must change it.</p>
+        </div>
+      ) : null}
+      {resetPassword.isError ? (
+        <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+          Password reset failed: {resetPassword.error.message}
         </div>
       ) : null}
 
@@ -277,12 +289,13 @@ export default function UsersPage() {
                       Impersonate
                     </button>
                     <button
-                      className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 transition hover:bg-background"
+                      className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 transition hover:bg-background disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={resetPassword.isPending}
                       onClick={() => resetPassword.mutate(user.id)}
                       type="button"
                     >
                       <Key size={14} />
-                      Reset password
+                      {resetPassword.isPending && resetPassword.variables === user.id ? "Resetting…" : "Reset password"}
                     </button>
                   </div>
                 </td>
