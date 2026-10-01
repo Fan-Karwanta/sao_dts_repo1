@@ -85,6 +85,38 @@ describe("buildColumns", () => {
       { key: "procurement", name: "Procurement", start: 3, span: 2 },
     ]);
   });
+
+  it("honors configured subfield types and configured labels", () => {
+    const columns = buildColumns([
+      node({
+        key: "step_21",
+        label: "STATUS & NO. OF DAYS EXTENDED",
+        sortOrder: 21,
+        fieldType: "JSON",
+        configuration: {
+          subfields: ["status", "daysExtended"],
+          subfieldTypes: { status: "text", daysExtended: "integer", bogus: "not-a-type" },
+        },
+      }),
+    ]);
+    expect(columns.map((c) => [c.key, c.label, c.type, c.step])).toEqual([
+      ["step_21.status", "STATUS", "TEXT", 21],
+      ["step_21.daysExtended", "NO. OF DAYS EXTENDED", "INTEGER", 21],
+    ]);
+  });
+
+  it("falls back to date-prefix inference without configured types", () => {
+    const columns = buildColumns([
+      node({
+        key: "step_27",
+        label: "FORWARDED & REMARKS",
+        sortOrder: 27,
+        fieldType: "JSON",
+        configuration: { subfields: ["dateForwarded", "remarks"] },
+      }),
+    ]);
+    expect(columns.map((c) => c.type)).toEqual(["DATE", "TEXT"]);
+  });
 });
 
 describe("parseCell", () => {

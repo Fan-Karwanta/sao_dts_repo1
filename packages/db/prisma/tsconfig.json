@@ -7,5 +7,5 @@
     "types": ["node"],
     "noEmit": true
   },
-  "include": ["seed.ts", "backfill-return-edges.ts"]
+  "include": ["seed.ts", "backfill-return-edges.ts", "backfill-step-21-status.ts"]
 }

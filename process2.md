@@ -20,7 +20,7 @@ Step 17 = CONTRACT DURATION                             = PROCUREMENT
 Step 18 = PROCUREMENT DOCUMENTS FORWARDED TO MMS        = PROCUREMENT
 Step 19 = DELIVERY DATE                                 = SUPPLY
 Step 20 = DATE OF INSPECTION                            = SUPPLY
-Step 21 = NO. OF DAYS EXTENDED                          = SUPPLY
+Step 21 = STATUS & NO. OF DAYS EXTENDED (2 COLUMNS)     = SUPPLY
 Step 22 = NO. OF DAYS DELAYED                           = SUPPLY
 Step 23 = SI NO.                                        = SUPPLY
 Step 24 = LD AMOUNT                                     = SUPPLY

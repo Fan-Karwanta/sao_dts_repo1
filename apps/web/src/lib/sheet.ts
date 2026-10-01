@@ -63,6 +63,17 @@ function subfieldLabels(label: string, subfields: string[], configured: string[]
   return subfields.map((subfield) => `${base} – ${humanize(subfield)}`);
 }
 
+const CELL_TYPES = new Set(["TEXT", "DATE", "DECIMAL", "INTEGER", "ENUM", "JSON"]);
+
+function subfieldType(subfield: string, configured: Record<string, unknown> | null) {
+  const raw = configured?.[subfield];
+  if (typeof raw === "string") {
+    const type = raw.toUpperCase();
+    if (CELL_TYPES.has(type)) return type as CellType;
+  }
+  return (subfield.toLowerCase().startsWith("date") ? "DATE" : "TEXT") as CellType;
+}
+
 export function buildColumns(nodes: WorkflowNode[]): SheetColumn[] {
   return nodes
     .filter((node) => node.type === "FIELD")
@@ -75,7 +86,12 @@ export function buildColumns(nodes: WorkflowNode[]): SheetColumn[] {
         currency: typeof config.currency === "string" ? config.currency : null,
         department: node.department,
       };
-      const subfields = node.fieldType === "JSON" ? stringArray(config.subfields) : null;
+      const rawSubfields = node.fieldType === "JSON" ? stringArray(config.subfields) : null;
+      const configuredLabels = stringArray(config.subfieldLabels);
+      const entries = rawSubfields
+        ?.map((name, index) => ({ name: name.trim(), label: configuredLabels?.[index] }))
+        .filter((entry) => entry.name);
+      const subfields = entries?.map((entry) => entry.name) ?? null;
       if (!subfields?.length) {
         return [
           {
@@ -87,13 +103,23 @@ export function buildColumns(nodes: WorkflowNode[]): SheetColumn[] {
           },
         ];
       }
-      const labels = subfieldLabels(node.label, subfields, stringArray(config.subfieldLabels));
+      const labels = subfieldLabels(
+        node.label,
+        subfields,
+        configuredLabels?.length === rawSubfields?.length
+          ? entries!.map((entry) => entry.label ?? "")
+          : null,
+      );
+      const types =
+        config.subfieldTypes && typeof config.subfieldTypes === "object" && !Array.isArray(config.subfieldTypes)
+          ? (config.subfieldTypes as Record<string, unknown>)
+          : null;
       return subfields.map((subfield, index) => ({
         ...base,
         key: `${node.key}.${subfield}`,
         subfield,
         label: labels[index]!,
-        type: (subfield.toLowerCase().startsWith("date") ? "DATE" : "TEXT") as CellType,
+        type: subfieldType(subfield, types),
         options: null,
         currency: null,
       }));

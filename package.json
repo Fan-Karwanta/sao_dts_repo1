@@ -23,6 +23,7 @@
     "db:deploy": "dotenv -e .env -- pnpm --filter @sao/db migrate:deploy",
     "db:seed": "dotenv -e .env -- pnpm --filter @sao/db seed",
     "db:backfill:return-edges": "dotenv -e .env -- pnpm --filter @sao/db backfill:return-edges",
+    "db:backfill:step-21-status": "dotenv -e .env -- pnpm --filter @sao/db backfill:step-21-status",
     "deploy:api": "npm run build -w @sao/contracts && npm run generate -w @sao/db && npm run build -w @sao/db && npm run build -w @sao/api && node scripts/deploy-api.mjs"
   },
   "devDependencies": {

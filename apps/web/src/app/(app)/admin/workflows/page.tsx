@@ -226,6 +226,44 @@ export default function WorkflowsPage() {
   });
   const selectedNode = nodes.find((node) => node.id === selectedNodeId);
   const selectedEdge = edges.find((edge) => edge.id === selectedEdgeId);
+  const subfieldRows = (() => {
+    const config = selectedNode?.data.configuration ?? {};
+    const names = Array.isArray(config.subfields)
+      ? config.subfields.filter((item): item is string => typeof item === "string")
+      : [];
+    const labels = Array.isArray(config.subfieldLabels) ? config.subfieldLabels : [];
+    const types =
+      config.subfieldTypes && typeof config.subfieldTypes === "object" && !Array.isArray(config.subfieldTypes)
+        ? (config.subfieldTypes as Record<string, unknown>)
+        : {};
+    return names.map((name, index) => ({
+      name,
+      label: typeof labels[index] === "string" ? (labels[index] as string) : "",
+      type: typeof types[name] === "string" ? (types[name] as string) : "text",
+    }));
+  })();
+  const setSubfieldRows = (rows: { name: string; label: string; type: string }[]) => {
+    updateNodes((items) =>
+      items.map((node) =>
+        node.id !== selectedNodeId
+          ? node
+          : {
+              ...node,
+              data: {
+                ...node.data,
+                configuration: {
+                  ...node.data.configuration,
+                  subfields: rows.map((row) => row.name.trim()),
+                  subfieldLabels: rows.map((row) => row.label.trim() || row.name.trim()),
+                  subfieldTypes: Object.fromEntries(
+                    rows.map((row) => [row.name.trim(), row.type]),
+                  ),
+                },
+              },
+            },
+      ),
+    );
+  };
   const addNode = (nodeType: BuilderData["nodeType"]) => {
     const id = crypto.randomUUID();
     updateNodes((items) => [
@@ -382,6 +420,58 @@ export default function WorkflowsPage() {
                 <label className="grid gap-2 font-medium">Label<input className="h-10 rounded-lg border border-border px-3" value={selectedNode.data.label} onChange={(event) => updateNodes((items) => items.map((node) => node.id === selectedNode.id ? { ...node, data: { ...node.data, label: event.target.value } } : node))} /></label>
                 <label className="grid gap-2 font-medium">Department<select className="h-10 rounded-lg border border-border px-3" value={selectedNode.data.departmentKey ?? ""} onChange={(event) => updateNodes((items) => items.map((node) => node.id === selectedNode.id ? { ...node, data: { ...node.data, departmentKey: event.target.value || null } } : node))}><option value="">System</option>{departments.data?.map((department) => <option key={department.id} value={department.key}>{department.name}</option>)}</select></label>
                 <label className="grid gap-2 font-medium">Field type<select className="h-10 rounded-lg border border-border px-3" value={selectedNode.data.fieldType ?? ""} onChange={(event) => updateNodes((items) => items.map((node) => node.id === selectedNode.id ? { ...node, data: { ...node.data, fieldType: event.target.value || null } } : node))}><option value="">None</option>{["text", "date", "datetime", "decimal", "integer", "enum", "json", "remarks"].map((type) => <option key={type}>{type}</option>)}</select></label>
+                {selectedNode.data.nodeType === "field" && selectedNode.data.fieldType === "json" ? (
+                  <div className="grid gap-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium">Columns</span>
+                      <button
+                        className="flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-xs font-semibold transition hover:bg-background"
+                        onClick={() => setSubfieldRows([...subfieldRows, { name: `field_${subfieldRows.length + 1}`, label: "", type: "text" }])}
+                        type="button"
+                      >
+                        <Plus size={13} />
+                        Add column
+                      </button>
+                    </div>
+                    {subfieldRows.map((row, index) => (
+                      <div className="grid grid-cols-[1fr_1fr_84px_28px] items-center gap-1.5" key={index}>
+                        <input
+                          aria-label="Subfield key"
+                          className="h-9 rounded-lg border border-border px-2 text-xs"
+                          onChange={(event) => setSubfieldRows(subfieldRows.map((item, itemIndex) => itemIndex === index ? { ...item, name: event.target.value } : item))}
+                          placeholder="key"
+                          value={row.name}
+                        />
+                        <input
+                          aria-label="Column label"
+                          className="h-9 rounded-lg border border-border px-2 text-xs"
+                          onChange={(event) => setSubfieldRows(subfieldRows.map((item, itemIndex) => itemIndex === index ? { ...item, label: event.target.value } : item))}
+                          placeholder="Label"
+                          value={row.label}
+                        />
+                        <select
+                          aria-label="Column type"
+                          className="h-9 rounded-lg border border-border px-1 text-xs"
+                          onChange={(event) => setSubfieldRows(subfieldRows.map((item, itemIndex) => itemIndex === index ? { ...item, type: event.target.value } : item))}
+                          value={row.type}
+                        >
+                          {["text", "date", "decimal", "integer", "enum", "json"].map((type) => <option key={type}>{type}</option>)}
+                        </select>
+                        <button
+                          aria-label="Remove column"
+                          className="grid size-7 place-items-center rounded-lg text-red-700 transition hover:bg-red-50"
+                          onClick={() => setSubfieldRows(subfieldRows.filter((_, itemIndex) => itemIndex !== index))}
+                          type="button"
+                        >
+                          <Trash size={13} />
+                        </button>
+                      </div>
+                    ))}
+                    {!subfieldRows.length ? (
+                      <p className="text-xs text-muted">No columns — this field stores a single JSON value.</p>
+                    ) : null}
+                  </div>
+                ) : null}
                 {selectedNode.data.nodeType !== "start" ? (
                   <button className="flex items-center justify-center gap-1.5 rounded-lg border border-red-200 px-3 py-2 font-semibold text-red-700 transition hover:bg-red-50" onClick={() => { updateNodes((items) => items.filter((node) => node.id !== selectedNode.id)); updateEdges((items) => items.filter((edge) => edge.source !== selectedNode.id && edge.target !== selectedNode.id)); setSelectedNodeId(""); }} type="button"><Trash size={14} />Delete node</button>
                 ) : null}
