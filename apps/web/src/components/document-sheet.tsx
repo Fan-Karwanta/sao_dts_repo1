@@ -120,13 +120,11 @@ function loadWidths(): Record<string, number> {
 function CellEditor({
   column,
   initial,
-  typed,
   onCommit,
   onCancel,
 }: {
   column: SheetColumn;
   initial: string;
-  typed: boolean;
   onCommit: (raw: string, direction: "down" | "right" | "left" | null) => void;
   onCancel: () => void;
 }) {
@@ -168,6 +166,7 @@ function CellEditor({
         value={draft}
       >
         <option value="">—</option>
+        <option value="N/A">N/A</option>
         {column.options.map((option) => (
           <option key={option} value={option}>
             {option}
@@ -176,7 +175,6 @@ function CellEditor({
       </select>
     );
   }
-  const useDatePicker = column.type === "DATE" && !typed;
   return (
     <input
       autoFocus
@@ -185,8 +183,8 @@ function CellEditor({
       onBlur={() => finish(null)}
       onChange={(event) => setDraft(event.target.value)}
       onKeyDown={onKeyDown}
-      placeholder={column.type === "DATE" ? "MM/DD/YYYY" : undefined}
-      type={useDatePicker ? "date" : "text"}
+      placeholder={column.type === "DATE" ? "MM/DD/YYYY or N/A" : undefined}
+      type="text"
       value={draft}
     />
   );
@@ -414,7 +412,6 @@ export function DocumentSheet({ documentId }: { documentId?: string }) {
     documentId: string;
     col: number;
     initial: string;
-    typed: boolean;
   } | null>(null);
   const [toast, setToast] = useState<{ message: string; tone: "error" | "info" } | null>(null);
   const [flashes, setFlashes] = useState(new Map<string, number>());
@@ -684,7 +681,6 @@ export function DocumentSheet({ documentId }: { documentId?: string }) {
         documentId: row.doc.id,
         col,
         initial: typed ?? editableText(current),
-        typed: typed !== undefined && column.type !== "ENUM",
       });
     },
     [columns, documentId, lockReason, router, rows, showToast],
@@ -912,7 +908,6 @@ export function DocumentSheet({ documentId }: { documentId?: string }) {
           else if (direction === "right") select(editingIndex, editing.col + 1);
           else select(editingIndex, editing.col - 1);
         }}
-        typed={editing.typed}
       />
     ) : null;
 

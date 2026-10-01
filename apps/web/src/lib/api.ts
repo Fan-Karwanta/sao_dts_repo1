@@ -1,5 +1,8 @@
+// Empty string = same-origin; production proxies /api and /socket.io through
+// Next.js rewrites (API_PROXY_ORIGIN) because Safari blocks cross-site cookies.
 export const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+  process.env.NEXT_PUBLIC_API_URL ??
+  (process.env.NODE_ENV === "production" ? "" : "http://localhost:3001");
 
 export class ApiError extends Error {
   constructor(

@@ -98,7 +98,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const userId = auth.data?.user.id;
   const socket = useMemo(
-    () => (userId ? io(API_URL, { withCredentials: true, autoConnect: false }) : null),
+    () =>
+      userId
+        ? io(API_URL || undefined, { withCredentials: true, autoConnect: false })
+        : null,
     [userId],
   );
 

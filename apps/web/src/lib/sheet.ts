@@ -159,6 +159,7 @@ export function editableText(value: unknown) {
 export function parseCell(column: SheetColumn, raw: string): ParseResult {
   const text = raw.trim();
   if (!text) return { ok: true, value: null };
+  if (/^n\/?a$/i.test(text)) return { ok: true, value: "N/A" };
   switch (column.type) {
     case "INTEGER": {
       const cleaned = text.replace(/,/g, "");

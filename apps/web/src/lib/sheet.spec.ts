@@ -101,6 +101,12 @@ describe("parseCell", () => {
       value: "LDAP",
     });
   });
+  it("accepts N/A for every field type", () => {
+    for (const type of ["TEXT", "DATE", "DECIMAL", "INTEGER", "ENUM", "JSON"] as const) {
+      expect(parseCell(column(type), "N/A")).toEqual({ ok: true, value: "N/A" });
+      expect(parseCell(column(type), "n/a")).toEqual({ ok: true, value: "N/A" });
+    }
+  });
 });
 
 describe("mergeCellValue / formatCell", () => {
@@ -112,5 +118,7 @@ describe("mergeCellValue / formatCell", () => {
   it("formats amounts and dates", () => {
     expect(formatCell(column("DECIMAL"), 1234.5)).toBe("1,234.50");
     expect(formatCell(column("DATE"), "2026-09-03")).toBe("Sep 3, 2026");
+    expect(formatCell(column("DATE"), "N/A")).toBe("N/A");
+    expect(formatCell(column("DECIMAL"), "N/A")).toBe("N/A");
   });
 });

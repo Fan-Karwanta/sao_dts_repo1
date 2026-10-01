@@ -37,7 +37,7 @@ const cookieOptions = {
   secure: process.env.NODE_ENV === "production",
   sameSite:
     process.env.NODE_ENV === "production"
-      ? ("none" as const)
+      ? ("lax" as const)
       : ("strict" as const),
   path: "/",
 };
