@@ -139,6 +139,9 @@ npx vercel --prod
 - **Login works locally but not in prod (or bounces back to login on Safari/iPad):** the session cookie isn't reaching the API. Confirm `API_PROXY_ORIGIN` is set on Vercel **and** `NEXT_PUBLIC_API_URL` is removed — `NEXT_PUBLIC_API_URL` forces cross-site requests that Safari's ITP strips cookies from. Also confirm `WEB_ORIGIN` exactly matches the Vercel URL (no trailing slash).
 - **`Invalid request origin` on POST/PUT:** the CSRF guard compares `Origin` to `WEB_ORIGIN` — same fix as above.
 - **Realtime feels delayed:** Vercel rewrites can't proxy WebSocket upgrades (and Hostinger's proxy may not either), so Socket.IO runs on long-polling — functional, just less instant. Nothing to fix in code.
+- **`429 Too Many Requests` on `/api/*`:** the app code never returns 429 — it comes from an edge rate limiter. Check the response's `Server`/`x-vercel-*` headers in DevTools → Network to see which layer rejected it:
+  - **Hostinger's shared proxy** is the usual source. Every browser tab holds a Socket.IO long-poll plus occasional API calls; when the app wakes from sleep or many tabs reconnect at once, the burst trips the limit and *all* requests (including `/api/auth/login`) get 429 until the window clears — usually under a minute. The client forces `transports: ["polling"]` and backed-off reconnects to keep the request rate low; if it still happens, ask Hostinger support to raise/whitelist the rate limit or move the API to a VPS/Render/Railway where you control the proxy.
+  - **Vercel** only returns 429 under active WAF/DDoS mitigation — check Vercel → project → Firewall/Security for blocked events.
 
 ## Later improvements
 

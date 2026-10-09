@@ -14,15 +14,39 @@ export class ApiError extends Error {
   }
 }
 
+const SAFE_METHODS = new Set(["GET", "HEAD"]);
+const RETRYABLE_STATUS = new Set([502, 503, 504]);
+
+async function request(path: string, init: RequestInit): Promise<Response> {
+  const method = (init.method ?? "GET").toUpperCase();
+  const attempts = SAFE_METHODS.has(method) ? 2 : 1;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    if (attempt > 0) {
+      // One delayed retry lets a cold-starting backend (Hostinger sleeps idle
+      // Node apps) come up instead of surfacing a transient gateway error.
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+    }
+    try {
+      const response = await fetch(`${API_URL}/api${path}`, {
+        ...init,
+        credentials: "include",
+        headers: {
+          ...(init.body ? { "Content-Type": "application/json" } : {}),
+          ...init.headers,
+        },
+      });
+      if (!RETRYABLE_STATUS.has(response.status) || attempt + 1 === attempts) {
+        return response;
+      }
+    } catch (error) {
+      if (attempt + 1 === attempts) throw error;
+    }
+  }
+  throw new Error("Unreachable");
+}
+
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(`${API_URL}/api${path}`, {
-    ...init,
-    credentials: "include",
-    headers: {
-      ...(init.body ? { "Content-Type": "application/json" } : {}),
-      ...init.headers,
-    },
-  });
+  const response = await request(path, init);
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as
       | {
@@ -33,7 +57,12 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
       | null;
     const base = Array.isArray(payload?.message)
       ? payload.message.join(", ")
-      : (payload?.message ?? "Request failed");
+      : (payload?.message ??
+        (response.status === 429
+          ? "Too many requests — please wait a moment and try again"
+          : RETRYABLE_STATUS.has(response.status)
+            ? "The server is temporarily unavailable — please try again"
+            : "Request failed"));
     const details = (payload?.issues ?? [])
       .map((issue) =>
         issue.path ? `${issue.path}: ${issue.message}` : issue.message,

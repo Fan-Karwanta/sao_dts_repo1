@@ -100,7 +100,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const socket = useMemo(
     () =>
       userId
-        ? io(API_URL || undefined, { withCredentials: true, autoConnect: false })
+        ? io(API_URL || undefined, {
+            withCredentials: true,
+            autoConnect: false,
+            // Vercel rewrites cannot proxy WebSocket upgrades, so skip the
+            // failed upgrade attempt and go straight to long-polling.
+            transports: ["polling"],
+            // Slow reconnect churn so sleeping/cold-starting backends and
+            // expired sessions don't hammer the API into a 429 rate limit.
+            reconnectionDelay: 2000,
+            reconnectionDelayMax: 30000,
+          })
         : null,
     [userId],
   );
@@ -114,6 +124,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     const refreshNotifications = () => {
       void queryClient.invalidateQueries({ queryKey: ["notifications"] });
     };
+    const onDisconnect = (reason: string) => {
+      if (reason !== "io server disconnect") return;
+      // The server rejected the connection (e.g. expired session). Revalidate
+      // auth so a dead session redirects to login instead of reconnect-looping.
+      void queryClient.invalidateQueries({ queryKey: ["auth"] });
+    };
+    socket.on("disconnect", onDisconnect);
     socket.on("document.created", refreshDocuments);
     socket.on("document.field.updated", refreshDocuments);
     socket.on("document.moved", refreshDocuments);
@@ -122,6 +139,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     socket.on("workflow.published", refreshDocuments);
     socket.on("notification.created", refreshNotifications);
     return () => {
+      socket.off("disconnect", onDisconnect);
       socket.off("document.created", refreshDocuments);
       socket.off("document.field.updated", refreshDocuments);
       socket.off("document.moved", refreshDocuments);
