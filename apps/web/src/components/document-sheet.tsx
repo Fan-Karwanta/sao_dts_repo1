@@ -575,13 +575,15 @@ export function DocumentSheet({ documentId }: { documentId?: string }) {
           : error.message,
       );
     },
-    onSettled: (_data, _error, input) => {
+    onSettled: (_data, error, input) => {
       setPending((current) => {
         const next = new Set(current);
         next.delete(cellKey(input.documentId, input.nodeId));
         return next;
       });
-      void queryClient.invalidateQueries({ queryKey: ["documents"] });
+      // On success the optimistic value is already shown and the realtime
+      // document.field.updated event triggers a (debounced) refresh.
+      if (error) void queryClient.invalidateQueries({ queryKey: ["documents"] });
     },
   });
 
@@ -807,10 +809,13 @@ export function DocumentSheet({ documentId }: { documentId?: string }) {
         documentId: presenceDocumentId,
         columnKey: presenceDocumentId ? selColumnKey : null,
       });
-    send();
+    // Debounced: over long-polling every emit is an HTTP request, so sending
+    // on each arrow-key/cell move would trip the host's rate limit.
+    const initial = window.setTimeout(send, 500);
     const heartbeat = window.setInterval(send, 15_000);
     socket.on("connect", send);
     return () => {
+      window.clearTimeout(initial);
       window.clearInterval(heartbeat);
       socket.off("connect", send);
     };

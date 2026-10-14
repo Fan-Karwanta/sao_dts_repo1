@@ -118,8 +118,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!socket) return;
     socket.connect();
+    // Coalesce bursts of realtime events into one refetch so many users
+    // editing at once don't multiply into a request storm (429s upstream).
+    let refreshTimer: number | undefined;
     const refreshDocuments = () => {
-      void queryClient.invalidateQueries({ queryKey: ["documents"] });
+      window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(() => {
+        void queryClient.invalidateQueries({ queryKey: ["documents"] });
+      }, 1000);
     };
     const refreshNotifications = () => {
       void queryClient.invalidateQueries({ queryKey: ["notifications"] });
@@ -139,6 +145,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     socket.on("workflow.published", refreshDocuments);
     socket.on("notification.created", refreshNotifications);
     return () => {
+      window.clearTimeout(refreshTimer);
       socket.off("disconnect", onDisconnect);
       socket.off("document.created", refreshDocuments);
       socket.off("document.field.updated", refreshDocuments);

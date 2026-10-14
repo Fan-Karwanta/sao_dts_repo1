@@ -17,24 +17,40 @@ export class ApiError extends Error {
 const SAFE_METHODS = new Set(["GET", "HEAD"]);
 const RETRYABLE_STATUS = new Set([502, 503, 504]);
 
+const MAX_RATE_LIMIT_RETRIES = 3;
+
+function retryAfterMs(response: Response, attempt: number) {
+  const header = Number(response.headers.get("Retry-After"));
+  const base = Number.isFinite(header) && header > 0 ? header * 1000 : 1000 * 2 ** attempt;
+  return Math.min(base, 10_000) + Math.random() * 300;
+}
+
 async function request(path: string, init: RequestInit): Promise<Response> {
   const method = (init.method ?? "GET").toUpperCase();
   const attempts = SAFE_METHODS.has(method) ? 2 : 1;
-  for (let attempt = 0; attempt < attempts; attempt++) {
+  for (let attempt = 0, limited = 0; attempt < attempts; attempt++) {
     if (attempt > 0) {
       // One delayed retry lets a cold-starting backend (Hostinger sleeps idle
       // Node apps) come up instead of surfacing a transient gateway error.
       await new Promise((resolve) => setTimeout(resolve, 1500));
     }
     try {
-      const response = await fetch(`${API_URL}/api${path}`, {
-        ...init,
-        credentials: "include",
-        headers: {
-          ...(init.body ? { "Content-Type": "application/json" } : {}),
-          ...init.headers,
-        },
-      });
+      const send = () =>
+        fetch(`${API_URL}/api${path}`, {
+          ...init,
+          credentials: "include",
+          headers: {
+            ...(init.body ? { "Content-Type": "application/json" } : {}),
+            ...init.headers,
+          },
+        });
+      let response = await send();
+      // A 429 means the request was rejected before processing, so retrying
+      // with backoff is safe for every method (including saves).
+      while (response.status === 429 && limited < MAX_RATE_LIMIT_RETRIES) {
+        await new Promise((resolve) => setTimeout(resolve, retryAfterMs(response, limited++)));
+        response = await send();
+      }
       if (!RETRYABLE_STATUS.has(response.status) || attempt + 1 === attempts) {
         return response;
       }
