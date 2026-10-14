@@ -633,6 +633,29 @@ export function DocumentSheet({ documentId }: { documentId?: string }) {
     [canEditColumn, columns, resolveNodeId],
   );
 
+  // Serialize writes with a small gap so rapid multi-cell edits reach the
+  // API as a steady stream instead of a burst (the edge rate limits bursts).
+  // onError still rolls back the optimistic value and toasts.
+  const saveQueue = useRef(Promise.resolve());
+  const enqueueSave = useCallback(
+    (input: { documentId: string; nodeId: string; value: unknown }) => {
+      saveQueue.current = saveQueue.current
+        .then(() => new Promise<void>((resolve) => window.setTimeout(resolve, 350)))
+        .then(() => {
+          // Resolve the expected version at execution time so two quick edits
+          // to the same cell don't stalemate on a version captured earlier.
+          const field = queryClient
+            .getQueryData<DocumentListItem[]>(["documents"])
+            ?.find((doc) => doc.id === input.documentId)
+            ?.fieldValues.find((f) => f.nodeId === input.nodeId);
+          return save
+            .mutateAsync({ ...input, expectedVersion: field?.version ?? 0 })
+            .then(() => undefined, () => undefined);
+        });
+    },
+    [queryClient, save],
+  );
+
   const commitCell = useCallback(
     (row: SheetRow | undefined, col: number, raw: string) => {
       const column = columns[col - FIXED_COUNT];
@@ -646,10 +669,10 @@ export function DocumentSheet({ documentId }: { documentId?: string }) {
       const field = row.values.get(column.nodeKey);
       const next = mergeCellValue(column, field?.value, parsed.value);
       if (sameValue(next, field?.value)) return true;
-      save.mutate({ documentId: row.doc.id, nodeId, value: next, expectedVersion: field?.version ?? 0 });
+      enqueueSave({ documentId: row.doc.id, nodeId, value: next });
       return true;
     },
-    [columns, lockReason, resolveNodeId, save, showToast],
+    [columns, enqueueSave, lockReason, resolveNodeId, showToast],
   );
 
   const focusGrid = () => gridRef.current?.focus({ preventScroll: true });
@@ -812,7 +835,7 @@ export function DocumentSheet({ documentId }: { documentId?: string }) {
     // Debounced: over long-polling every emit is an HTTP request, so sending
     // on each arrow-key/cell move would trip the host's rate limit.
     const initial = window.setTimeout(send, 500);
-    const heartbeat = window.setInterval(send, 15_000);
+    const heartbeat = window.setInterval(send, 30_000);
     socket.on("connect", send);
     return () => {
       window.clearTimeout(initial);

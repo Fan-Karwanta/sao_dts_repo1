@@ -17,12 +17,12 @@ export class ApiError extends Error {
 const SAFE_METHODS = new Set(["GET", "HEAD"]);
 const RETRYABLE_STATUS = new Set([502, 503, 504]);
 
-const MAX_RATE_LIMIT_RETRIES = 3;
+const MAX_RATE_LIMIT_RETRIES = 5;
 
 function retryAfterMs(response: Response, attempt: number) {
   const header = Number(response.headers.get("Retry-After"));
   const base = Number.isFinite(header) && header > 0 ? header * 1000 : 1000 * 2 ** attempt;
-  return Math.min(base, 10_000) + Math.random() * 300;
+  return Math.min(base, 15_000) + Math.random() * 500;
 }
 
 async function request(path: string, init: RequestInit): Promise<Response> {

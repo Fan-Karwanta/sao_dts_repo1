@@ -125,7 +125,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       window.clearTimeout(refreshTimer);
       refreshTimer = window.setTimeout(() => {
         void queryClient.invalidateQueries({ queryKey: ["documents"] });
-      }, 1000);
+      }, 2500);
     };
     const refreshNotifications = () => {
       void queryClient.invalidateQueries({ queryKey: ["notifications"] });
