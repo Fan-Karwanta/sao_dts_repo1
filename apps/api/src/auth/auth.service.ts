@@ -197,19 +197,16 @@ export class AuthService {
       await this.rejectRegistrationLogin(identifier, input.password);
     }
     if (!user?.credential) throw new UnauthorizedException("Invalid credentials");
-    if (user.credential.lockedUntil && user.credential.lockedUntil > new Date()) {
-      throw new UnauthorizedException("Account is temporarily locked");
-    }
 
     const valid = await verify(user.credential.passwordHash, input.password);
     if (!valid) {
-      const failedLoginCount = user.credential.failedLoginCount + 1;
+      // Failed attempts are counted for visibility only; accounts are never
+      // auto-locked (a lockout lets anyone lock out a known username).
       await this.database.credential.update({
         where: { userId: user.id },
         data: {
-          failedLoginCount,
-          lockedUntil:
-            failedLoginCount >= 5 ? new Date(Date.now() + 15 * 60 * 1000) : null,
+          failedLoginCount: user.credential.failedLoginCount + 1,
+          lockedUntil: null,
         },
       });
       throw new UnauthorizedException("Invalid credentials");

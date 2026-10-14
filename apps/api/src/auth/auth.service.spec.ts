@@ -134,6 +134,29 @@ describe("AuthService.login account status", () => {
     );
   });
 
+  it("never locks an account after repeated wrong passwords", async () => {
+    database.user.findFirst.mockResolvedValue({
+      ...userWithStatus("ACTIVE"),
+      credential: {
+        ...userWithStatus("ACTIVE").credential,
+        failedLoginCount: 10,
+        lockedUntil: new Date(Date.now() + 60_000),
+      },
+    });
+    vi.mocked(verify).mockResolvedValue(true);
+    database.$transaction.mockImplementation(
+      (callback: (transaction: unknown) => unknown) =>
+        callback({
+          credential: { update: vi.fn() },
+          session: { create: vi.fn().mockResolvedValue({ id: "s", expiresAt: new Date() }) },
+        }),
+    );
+
+    await expect(service.login(loginInput)).resolves.toMatchObject({
+      user: { username: "juan" },
+    });
+  });
+
   it("creates a session for an active user", async () => {
     const session = { id: "session-1", expiresAt: new Date() };
     database.user.findFirst.mockResolvedValue(userWithStatus("ACTIVE"));
