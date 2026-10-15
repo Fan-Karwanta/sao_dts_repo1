@@ -23,7 +23,9 @@ type AuthenticatedSocket = Socket<
 
 @WebSocketGateway({
   cors: {
-    origin: process.env.WEB_ORIGIN ?? "http://localhost:3000",
+    origin: (process.env.WEB_ORIGIN ?? "http://localhost:3000")
+      .split(",")
+      .map((origin) => origin.trim()),
     credentials: true,
   },
 })

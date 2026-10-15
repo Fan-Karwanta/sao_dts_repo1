@@ -34,7 +34,12 @@ import { AuthService } from "./auth.service.js";
 
 const cookieOptions = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
+  // COOKIE_SECURE=false lets the app run over plain HTTP on a LAN deployment;
+  // unset defaults to Secure in production as before.
+  secure:
+    process.env.COOKIE_SECURE !== undefined
+      ? process.env.COOKIE_SECURE === "true"
+      : process.env.NODE_ENV === "production",
   sameSite:
     process.env.NODE_ENV === "production"
       ? ("lax" as const)

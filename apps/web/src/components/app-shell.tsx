@@ -103,9 +103,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         ? io(API_URL || undefined, {
             withCredentials: true,
             autoConnect: false,
-            // Vercel rewrites cannot proxy WebSocket upgrades, so skip the
-            // failed upgrade attempt and go straight to long-polling.
-            transports: ["polling"],
+            // Prefer a real WebSocket (works on the LAN/self-hosted proxy and
+            // is far cheaper than polling). Vercel rewrites can't proxy the
+            // upgrade — socket.io then falls back to long-polling on its own.
+            transports: ["websocket", "polling"],
             // Slow reconnect churn so sleeping/cold-starting backends and
             // expired sessions don't hammer the API into a 429 rate limit.
             reconnectionDelay: 2000,
