@@ -1,5 +1,11 @@
 # LAN Deployment Guide — SAO Document Tracking System
 
+> **Fast path:** on the server, run `scripts\setup-local-server.ps1` in an
+> elevated PowerShell. It automates most of this guide (installs, repo clone,
+> `.env`, build, nginx, PM2, firewall). Read this document alongside it for
+> context, the prompts it will ask, and troubleshooting.
+
+
 Everything runs on one Windows server inside the institution network. Users open
 `http://<server>` in a browser; remote staff connect through the office VPN.
 No Vercel, no Hostinger, no external rate limits.
