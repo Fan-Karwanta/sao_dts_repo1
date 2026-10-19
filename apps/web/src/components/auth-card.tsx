@@ -1,5 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
+import doghBackground from "../../public/dogh_background.jpg";
+import doghLogo from "../../public/dogh_logo.png";
 
 export function AuthCard({
   title,
@@ -17,7 +19,7 @@ export function AuthCard({
   return (
     <main className="relative grid min-h-screen place-items-center p-4">
       <Image
-        src="/dogh_background.jpg"
+        src={doghBackground}
         alt=""
         fill
         priority
@@ -28,7 +30,7 @@ export function AuthCard({
       <section className="relative w-full max-w-lg rounded-3xl border border-border bg-white p-7 shadow-[0_24px_80px_rgba(17,53,32,0.12)] sm:p-10">
         <div className="mb-8 flex items-center gap-3">
           <Image
-            src="/dogh_logo.png"
+            src={doghLogo}
             alt="Davao Occidental General Hospital logo"
             width={48}
             height={48}

@@ -24,6 +24,7 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { io } from "socket.io-client";
 import { SocketContext } from "@/components/realtime";
 import { Skeleton } from "@/components/skeleton";
+import doghLogo from "../../public/dogh_logo.png";
 import { api, API_URL, ApiError } from "@/lib/api";
 import { roleDescriptor } from "@/lib/roles";
 import type { AuthContext } from "@/lib/types";
@@ -183,7 +184,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       >
         <div className={`flex items-center gap-3 ${collapsed ? "lg:flex-col" : ""}`}>
           <Image
-            src="/dogh_logo.png"
+            src={doghLogo}
             alt="Davao Occidental General Hospital logo"
             width={44}
             height={44}
