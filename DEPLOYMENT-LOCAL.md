@@ -22,7 +22,7 @@ browser ──► nginx :80 ──► Next.js web   :3000
 |---|---|
 | Node.js 22 LTS | https://nodejs.org installer |
 | pnpm | `npm install -g pnpm` (or `npx --yes pnpm@10.17.1` everywhere) |
-| PostgreSQL 17 | https://www.postgresql.org/download/windows installer — note the postgres superuser password |
+| PostgreSQL 18 | https://www.postgresql.org/download/windows installer — **must be ≥18**: Neon runs PG18 and `pg_dump` can't export from a newer server. Note the postgres superuser password |
 | nginx for Windows | https://nginx.org/en/download.html — unzip to e.g. `C:\nginx` |
 | PM2 | `npm install -g pm2 pm2-windows-startup` |
 | git | to clone/update the repo |
@@ -48,8 +48,8 @@ CREATE USER sao WITH PASSWORD '<strong-password>';
 CREATE DATABASE sao_dts OWNER sao;
 ```
 
-(Alternative: `docker compose up -d postgres` if you prefer Docker — the repo's
-`compose.yaml` runs Postgres 17. The native installer is simpler on Windows.)
+(Alternative: `docker compose up -d postgres` if you prefer Docker — but bump
+the repo's `compose.yaml` image to `postgres:18` first so pg_dump of Neon works.)
 
 ## Step 3 — `.env` at the repo root
 
@@ -138,11 +138,12 @@ New-NetFirewallRule -DisplayName "SAO DTS HTTP" -Direction Inbound -LocalPort 80
 On a machine that can reach both databases:
 
 ```powershell
-# Export from Neon (pg_dump is part of the PostgreSQL install)
-pg_dump "postgresql://neondb_owner:...@ep-....neon.tech/neondb?sslmode=require" -Fc -f neon-backup.dump
+# Export from Neon — MUST use the pg_dump from PostgreSQL 18+ (Neon runs 18)
+& "C:\Program Files\PostgreSQL\18\bin\pg_dump.exe" "postgresql://neondb_owner:...@ep-....neon.tech/neondb?sslmode=require" -Fc -f neon-backup.dump
 
-# Restore into the local server
-pg_restore -h <server-ip> -U sao -d sao_dts --clean --if-exists neon-backup.dump
+# Restore into the local server. --no-owner is required: the dump references
+# Neon's neondb_owner role, which doesn't exist locally.
+& "C:\Program Files\PostgreSQL\18\bin\pg_restore.exe" -h <server-ip> -U sao -d sao_dts --no-owner --no-privileges neon-backup.dump
 ```
 
 Skip `pnpm db:seed`'s fresh data if you restored real data — but re-run it if

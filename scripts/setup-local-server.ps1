@@ -29,14 +29,16 @@ Write-Step "pnpm + PM2"
 if (-not (Have pnpm)) { npm install -g pnpm }
 if (-not (Have pm2)) { npm install -g pm2 pm2-windows-startup }
 
-Write-Step "PostgreSQL 17"
-$psql = "C:\Program Files\PostgreSQL\17\bin\psql.exe"
+Write-Step "PostgreSQL 18"
+# Neon runs Postgres 18, and pg_dump can only export from a server whose
+# version is <= the tool's — install 18 so the Neon data migration works.
+$psql = "C:\Program Files\PostgreSQL\18\bin\psql.exe"
 if (-not (Test-Path $psql)) {
   $pgPass = -join ((48..57)+(97..122) | Get-Random -Count 24 | ForEach-Object {[char]$_})
   # EnterpriseDB silent install; superuser password is generated and saved to
-  # $RepoDir\.pg-superuser.txt (delete after verifying you don't need it).
-  winget install -e --id PostgreSQL.PostgreSQL.17 --accept-package-agreements --accept-source-agreements `
-    --override "--mode unattended --unattendedmodeui none --superpassword $pgPass --servicename postgresql-x64-17 --servicepassword $pgPass"
+  # $env:TEMP\pg-superuser.txt (delete after verifying you don't need it).
+  winget install -e --id PostgreSQL.PostgreSQL.18 --accept-package-agreements --accept-source-agreements `
+    --override "--mode unattended --unattendedmodeui none --superpassword $pgPass --servicename postgresql-x64-18 --servicepassword $pgPass"
   $pgPass | Out-File -Encoding ascii "$env:TEMP\pg-superuser.txt"
   Write-Host "postgres superuser password saved to $env:TEMP\pg-superuser.txt"
 }
