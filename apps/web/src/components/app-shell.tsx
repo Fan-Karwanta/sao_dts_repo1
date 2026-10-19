@@ -100,9 +100,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const socket = useMemo(
     () =>
       userId
-        ? io(API_URL || undefined, {
+        ? io(API_URL && !API_URL.startsWith("/") ? API_URL : undefined, {
             withCredentials: true,
             autoConnect: false,
+            // When NEXT_PUBLIC_API_URL is a path prefix (e.g. "/sao_dts" on the
+            // shared LAN server), the socket endpoint lives under it too.
+            path: API_URL.startsWith("/") ? `${API_URL}/socket.io` : "/socket.io",
             // Prefer a real WebSocket (works on the LAN/self-hosted proxy and
             // is far cheaper than polling). Vercel rewrites can't proxy the
             // upgrade — socket.io then falls back to long-polling on its own.
