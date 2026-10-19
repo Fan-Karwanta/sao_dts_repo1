@@ -86,15 +86,29 @@ pnpm build:all      # builds contracts, db, api, and web
 
 ## Step 5 — nginx
 
-1. Copy `infra\nginx\sao-dts-local.conf` somewhere stable (e.g. `C:\nginx\conf\sao-dts-local.conf`).
-2. In `C:\nginx\conf\nginx.conf`, inside the `http { ... }` block, add:
-   `include conf/sao-dts-local.conf;`
-   and remove/comment the default `server { listen 80; ... }` block if it exists.
+1. Copy `infra\nginx\sao-dts-local.conf` to `C:\nginx\conf\sao-dts-local.conf`.
+2. Replace `C:\nginx\conf\nginx.conf` with this minimal config (keep the
+   original as `nginx.conf.orig` if you want):
+
+   ```nginx
+   worker_processes  1;
+   events { worker_connections  1024; }
+   http {
+       include       mime.types;
+       default_type  application/octet-stream;
+       sendfile        on;
+       keepalive_timeout  65;
+       include       sao-dts-local.conf;
+   }
+   ```
+
+   (nginx resolves `include` paths relative to the `conf/` directory, so the
+   file name alone is correct — `conf/sao-dts-local.conf` will fail.)
 3. Test + start:
 
 ```powershell
-C:\nginx\nginx.exe -t
-start C:\nginx\nginx.exe
+C:\nginx\nginx.exe -t -p C:\nginx\
+cd C:\nginx; .\nginx.exe -p C:\nginx\
 ```
 
 To auto-start nginx on boot, register it as a service with

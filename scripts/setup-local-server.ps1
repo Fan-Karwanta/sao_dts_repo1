@@ -112,13 +112,22 @@ Write-Step "nginx config"
 Copy-Item "$RepoDir\infra\nginx\sao-dts-local.conf" "$NginxDir\conf\sao-dts-local.conf" -Force
 $nginxConf = "$NginxDir\conf\nginx.conf"
 if (-not (Select-String -Path $nginxConf -Pattern "sao-dts-local.conf" -Quiet)) {
-  # Comment out the default port-80 server block, then include ours.
-  $conf = Get-Content $nginxConf -Raw
-  $conf = $conf -replace '(?ms)^(\s*server\s*\{.*?^\s*\})', '# default server removed for SAO DTS' + "`r`n# `$1"
-  $conf = $conf -replace '(?m)^(}\s*)$', "    include conf/sao-dts-local.conf;`r`n`$1"
-  $conf | Set-Content $nginxConf -Encoding ascii
+  Copy-Item $nginxConf "$nginxConf.orig" -Force
+  # Write a minimal config rather than patching the stock one — the default
+  # server block contains nested locations that are hard to strip reliably.
+  @"
+worker_processes  1;
+events { worker_connections  1024; }
+http {
+    include       mime.types;
+    default_type  application/octet-stream;
+    sendfile        on;
+    keepalive_timeout  65;
+    include       sao-dts-local.conf;
 }
-& "$NginxDir\nginx.exe" -t
+"@ | Set-Content $nginxConf -Encoding ascii
+}
+& "$NginxDir\nginx.exe" -t -p "$NginxDir\"
 
 Write-Step "nginx auto-start (Task Scheduler)"
 if (-not (Get-ScheduledTask -TaskName "sao-nginx" -ErrorAction SilentlyContinue)) {
