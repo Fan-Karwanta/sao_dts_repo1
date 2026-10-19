@@ -1,9 +1,9 @@
-# SAO DTS — Windows LAN server bootstrap.
+﻿# SAO DTS --- Windows LAN server bootstrap.
 # Run in an ELEVATED PowerShell (Run as Administrator):
 #   powershell -ExecutionPolicy Bypass -File scripts\setup-local-server.ps1
 #
 # Installs prerequisites, clones/updates the repo, configures .env, builds,
-# and registers nginx + the apps to start on boot. Idempotent — safe to re-run.
+# and registers nginx + the apps to start on boot. Idempotent --- safe to re-run.
 # Companion docs: DEPLOYMENT-LOCAL.md (read it for context and troubleshooting).
 
 #requires -RunAsAdministrator
@@ -18,8 +18,15 @@ function Have($cmd) { return [bool](Get-Command $cmd -ErrorAction SilentlyContin
 
 # ---------- 1. Prerequisites ----------
 
+Write-Step "git"
+if (-not (Have git)) {
+  winget install -e --id Git.Git --accept-package-agreements --accept-source-agreements
+  $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+}
+
 Write-Step "Node.js 22 LTS"
-if (-not (Have node) -or [int](node -v).TrimStart("v").Split(".")[0] -lt 22) {
+$nodeMajor = if (Have node) { [int]((node -v).TrimStart("v").Split(".")[0]) } else { 0 }
+if ($nodeMajor -lt 22) {
   winget install -e --id OpenJS.NodeJS.LTS --accept-package-agreements --accept-source-agreements
   $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
 }
@@ -31,7 +38,7 @@ if (-not (Have pm2)) { npm install -g pm2 pm2-windows-startup }
 
 Write-Step "PostgreSQL 18"
 # Neon runs Postgres 18, and pg_dump can only export from a server whose
-# version is <= the tool's — install 18 so the Neon data migration works.
+# version is <= the tool's --- install 18 so the Neon data migration works.
 $psql = "C:\Program Files\PostgreSQL\18\bin\psql.exe"
 if (-not (Test-Path $psql)) {
   $pgPass = -join ((48..57)+(97..122) | Get-Random -Count 24 | ForEach-Object {[char]$_})
@@ -68,7 +75,7 @@ Write-Step ".env"
 $envFile = "$RepoDir\.env"
 if (-not (Test-Path $envFile)) {
   $serverNames = Read-Host "Address users will type (e.g. http://sao-dts or http://192.168.1.50; comma-separate multiple)"
-  $dbPass      = Read-Host "New password for the 'sao' PostgreSQL user"
+  $dbPass      = Read-Host "New password for the 'sao' PostgreSQL user (letters/numbers only - no @ or :)"
   $adminPass   = Read-Host "Admin account password (12+ chars)"
   $secret      = node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
   $origins     = ($serverNames -split "," | ForEach-Object { $_.Trim().TrimEnd("/") }) -join ","
@@ -115,7 +122,7 @@ Copy-Item "$RepoDir\infra\nginx\sao-dts-local.conf" "$NginxDir\conf\sao-dts-loca
 $nginxConf = "$NginxDir\conf\nginx.conf"
 if (-not (Select-String -Path $nginxConf -Pattern "sao-dts-local.conf" -Quiet)) {
   Copy-Item $nginxConf "$nginxConf.orig" -Force
-  # Write a minimal config rather than patching the stock one — the default
+  # Write a minimal config rather than patching the stock one --- the default
   # server block contains nested locations that are hard to strip reliably.
   @"
 worker_processes  1;
@@ -133,7 +140,7 @@ http {
 
 Write-Step "nginx auto-start (Task Scheduler)"
 if (-not (Get-ScheduledTask -TaskName "sao-nginx" -ErrorAction SilentlyContinue)) {
-  schtasks /create /tn "sao-nginx" /tr "$NginxDir\nginx.exe -p $NginxDir" /sc onstart /ru SYSTEM /f | Out-Null
+  schtasks /create /tn "sao-nginx" /tr "`"$NginxDir\nginx.exe`" -p `"$NginxDir\`"" /sc onstart /ru SYSTEM /f | Out-Null
 }
 Get-Process nginx -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Process "$NginxDir\nginx.exe" -ArgumentList "-p `"$NginxDir`"" -WorkingDirectory $NginxDir
@@ -152,12 +159,33 @@ if (-not (Get-NetFirewallRule -DisplayName "SAO DTS HTTP" -ErrorAction SilentlyC
   New-NetFirewallRule -DisplayName "SAO DTS HTTP" -Direction Inbound -LocalPort $SitePort -Protocol TCP -Action Allow | Out-Null
 }
 
+# ---------- 8. Optional Neon data import ----------
+
+Write-Step "Migrate existing data from Neon (optional)"
+$doImport = Read-Host "Import all existing data from the Neon database now? (y/N)"
+if ($doImport -match "^[yY]") {
+  $neonUrl = Read-Host "Paste the Neon DATABASE_URL (from the cloud .env / Neon dashboard)"
+  $dump    = "$env:TEMP\neon-backup.dump"
+  $pgBin   = Split-Path $psql
+  & "$pgBin\pg_dump.exe" "$neonUrl" -Fc -f $dump
+  if ($LASTEXITCODE -ne 0) { throw "pg_dump failed --- check the Neon URL and network." }
+
+  # Reset the local schema so the restore doesn't collide with seeded objects.
+  $env:PGPASSWORD = ([regex]::Match((Get-Content $envFile -Raw), 'DATABASE_URL=postgresql://\S+?:(.+?)@')).Groups[1].Value
+  & $psql -h localhost -U $saoUser -d sao_dts -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+  # --no-owner is required: the dump references Neon's neondb_owner role.
+  & "$pgBin\pg_restore.exe" -h localhost -U $saoUser -d sao_dts --no-owner --no-privileges $dump
+  Remove-Item Env:PGPASSWORD
+  if ($LASTEXITCODE -ne 0) { throw "pg_restore failed --- see errors above." }
+  pm2 restart all --update-env
+  Write-Host "Neon data imported. Log in with your existing cloud credentials."
+}
+
 Write-Step "Done"
 Write-Host @"
-Open http://localhost on this server — the login page should load.
+Open http://localhost on this server --- the login page should load.
 Then from any LAN machine open the WEB_ORIGIN address you entered.
 
-If migrating existing data from Neon, see 'Step 8' in DEPLOYMENT-LOCAL.md.
 Logs:   pm2 logs
 Status: pm2 status ; curl http://localhost/api/health/live
 "@
