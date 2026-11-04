@@ -72,7 +72,6 @@ interface Selection {
 
 const FIXED = [
   { key: "fixed:reference", label: "REFERENCE NO.", width: 130 },
-  { key: "fixed:title", label: "PROJECT TITLE", width: 260 },
   { key: "fixed:current", label: "CURRENT STEP", width: 190 },
 ] as const;
 const FIXED_COUNT = FIXED.length;
@@ -287,7 +286,8 @@ const SheetRowView = memo(function SheetRowView({
         data-cell={`${index}-0`}
         onDoubleClick={() => onCellDoubleClick(index, 0)}
         onMouseDown={() => onCellMouseDown(index, 0)}
-        style={{ left: stickyLeft[0], borderColor: GRID_LINE }}
+        style={{ left: stickyLeft[0], borderColor: GRID_LINE, boxShadow: "2px 0 0 0 #c4c7c5" }}
+        title={doc.title}
       >
         <div className="flex items-center justify-between gap-1">
           <span className="truncate text-[#0b57d0]">{doc.referenceNumber}</span>
@@ -305,21 +305,10 @@ const SheetRowView = memo(function SheetRowView({
         {selection(0)}
       </td>
       <td
-        className={`${baseCell} sticky z-[5] bg-white`}
+        className={baseCell}
         data-cell={`${index}-1`}
         onDoubleClick={() => onCellDoubleClick(index, 1)}
         onMouseDown={() => onCellMouseDown(index, 1)}
-        style={{ left: stickyLeft[1], borderColor: GRID_LINE, boxShadow: "2px 0 0 0 #c4c7c5" }}
-        title={doc.title}
-      >
-        <div className="truncate">{doc.title}</div>
-        {selection(1)}
-      </td>
-      <td
-        className={baseCell}
-        data-cell={`${index}-2`}
-        onDoubleClick={() => onCellDoubleClick(index, 2)}
-        onMouseDown={() => onCellMouseDown(index, 2)}
         style={{ borderColor: GRID_LINE }}
       >
         <div className="flex items-center gap-1.5">
@@ -327,8 +316,8 @@ const SheetRowView = memo(function SheetRowView({
           <span className="truncate">{doc.currentNode?.label ?? "—"}</span>
         </div>
         {flash(`${doc.id}:current`)}
-        {selection(2)}
-        <Presence viewers={viewers.get(FIXED[2].key)} />
+        {selection(1)}
+        <Presence viewers={viewers.get(FIXED[1].key)} />
       </td>
       {columns.map((column, offset) => {
         const col = offset + FIXED_COUNT;
@@ -502,11 +491,8 @@ export function DocumentSheet({ documentId }: { documentId?: string }) {
     (key: string, fallback = DEFAULT_WIDTH) => widths[key] ?? fallback,
     [widths],
   );
-  const stickyLeft = useMemo(
-    () => [ROW_NUMBER_WIDTH, ROW_NUMBER_WIDTH + widthOf(FIXED[0].key, FIXED[0].width)],
-    [widthOf],
-  );
-  const stickyWidth = stickyLeft[1]! + widthOf(FIXED[1].key, FIXED[1].width);
+  const stickyLeft = useMemo(() => [ROW_NUMBER_WIDTH], []);
+  const stickyWidth = ROW_NUMBER_WIDTH + widthOf(FIXED[0].key, FIXED[0].width);
 
   const showToast = useCallback((message: string, tone: "error" | "info" = "error") => {
     setToast({ message, tone });
@@ -729,6 +715,23 @@ export function DocumentSheet({ documentId }: { documentId?: string }) {
       ?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [sel.row, sel.col]);
 
+  useEffect(() => {
+    const grid = gridRef.current;
+    if (!grid) return;
+    const onWheel = (event: WheelEvent) => {
+      if (!event.deltaY || Math.abs(event.deltaX) >= Math.abs(event.deltaY)) return;
+      // The frozen reference zone keeps natural vertical scrolling; over the
+      // step columns the wheel pans sideways so later steps stay reachable.
+      if (event.clientX < grid.getBoundingClientRect().left + stickyWidth) return;
+      const maxLeft = grid.scrollWidth - grid.clientWidth;
+      if (event.deltaY < 0 ? grid.scrollLeft <= 0 : grid.scrollLeft >= maxLeft - 1) return;
+      event.preventDefault();
+      grid.scrollLeft += event.deltaY * (event.deltaMode === 1 ? 32 : 1);
+    };
+    grid.addEventListener("wheel", onWheel, { passive: false });
+    return () => grid.removeEventListener("wheel", onWheel);
+  }, [stickyWidth]);
+
   const onGridKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (editing || !rows.length || event.target !== event.currentTarget) return;
     const { row, col } = sel;
@@ -779,8 +782,7 @@ export function DocumentSheet({ documentId }: { documentId?: string }) {
   const displayText = (row: SheetRow | undefined, col: number) => {
     if (!row) return "";
     if (col === 0) return row.doc.referenceNumber;
-    if (col === 1) return row.doc.title;
-    if (col === 2) return row.doc.currentNode?.label ?? row.doc.status;
+    if (col === 1) return row.doc.currentNode?.label ?? row.doc.status;
     const column = columns[col - FIXED_COUNT]!;
     return formatCell(column, cellValue(column, row.values.get(column.nodeKey)?.value));
   };
@@ -1202,7 +1204,7 @@ export function DocumentSheet({ documentId }: { documentId?: string }) {
                 const active = col === sel.col;
                 return (
                   <th
-                    className={`${headerCell} sticky top-0 z-[20] text-[11px] ${col < 2 ? "z-[25]" : ""}`}
+                    className={`${headerCell} sticky top-0 z-[20] text-[11px] ${col < 1 ? "z-[25]" : ""}`}
                     key={column.key}
                     onMouseDown={() => {
                       select(sel.row < 0 ? 0 : sel.row, col);
@@ -1213,7 +1215,7 @@ export function DocumentSheet({ documentId }: { documentId?: string }) {
                       color: active ? "#0b57d0" : "#5f6368",
                       fontWeight: active ? 600 : 400,
                       borderColor: GRID_LINE,
-                      left: col < 2 ? stickyLeft[col] : undefined,
+                      left: col < 1 ? stickyLeft[col] : undefined,
                     }}
                   >
                     {columnLetter(col)}
@@ -1234,7 +1236,6 @@ export function DocumentSheet({ documentId }: { documentId?: string }) {
               />
               <th
                 className={`${headerCell} sticky z-[25] text-[11px] font-bold tracking-[0.35em] text-white`}
-                colSpan={2}
                 style={{ top: HEADER.letters, left: stickyLeft[0], background: "#434343", borderColor: GRID_LINE }}
               >
                 DOCUMENT
@@ -1260,11 +1261,11 @@ export function DocumentSheet({ documentId }: { documentId?: string }) {
             <tr style={{ height: HEADER.label }}>
               {FIXED.map((fixed, col) => (
                 <th
-                  className={`${headerCell} sticky px-1.5 text-[10.5px] font-bold leading-tight text-[#202124] ${col < 2 ? "z-[25]" : "z-[20]"}`}
+                  className={`${headerCell} sticky px-1.5 text-[10.5px] font-bold leading-tight text-[#202124] ${col < 1 ? "z-[25]" : "z-[20]"}`}
                   key={fixed.key}
                   style={{
                     top: HEADER.letters + HEADER.band,
-                    left: col < 2 ? stickyLeft[col] : undefined,
+                    left: col < 1 ? stickyLeft[col] : undefined,
                     background: "#efefef",
                     borderColor: GRID_LINE,
                   }}
@@ -1293,11 +1294,11 @@ export function DocumentSheet({ documentId }: { documentId?: string }) {
             <tr style={{ height: HEADER.step }}>
               {FIXED.map((fixed, col) => (
                 <th
-                  className={`${headerCell} sticky text-[10.5px] text-[#80868b] ${col < 2 ? "z-[25]" : "z-[20]"}`}
+                  className={`${headerCell} sticky text-[10.5px] text-[#80868b] ${col < 1 ? "z-[25]" : "z-[20]"}`}
                   key={fixed.key}
                   style={{
                     top: HEADER.letters + HEADER.band + HEADER.label,
-                    left: col < 2 ? stickyLeft[col] : undefined,
+                    left: col < 1 ? stickyLeft[col] : undefined,
                     background: "#ffffff",
                     borderColor: GRID_LINE,
                     borderBottomColor: "#c4c7c5",
@@ -1333,12 +1334,12 @@ export function DocumentSheet({ documentId }: { documentId?: string }) {
                     </th>
                     {allColumns.map((column, col) => (
                       <td
-                        className={`h-6 border-b border-r px-1.5 align-middle ${col < 2 ? "sticky z-[5] bg-white" : ""}`}
+                        className={`h-6 border-b border-r px-1.5 align-middle ${col < 1 ? "sticky z-[5] bg-white" : ""}`}
                         key={column.key}
                         style={{
                           borderColor: GRID_LINE,
-                          left: col < 2 ? stickyLeft[col] : undefined,
-                          boxShadow: col === 1 ? "2px 0 0 0 #c4c7c5" : undefined,
+                          left: col < 1 ? stickyLeft[col] : undefined,
+                          boxShadow: col === 0 ? "2px 0 0 0 #c4c7c5" : undefined,
                         }}
                       >
                         <div
