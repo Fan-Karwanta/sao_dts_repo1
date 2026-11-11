@@ -147,6 +147,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     socket.on("document.moved", refreshDocuments);
     socket.on("document.returned", refreshDocuments);
     socket.on("document.rerouted", refreshDocuments);
+    socket.on("document.reference.corrected", refreshDocuments);
     socket.on("workflow.published", refreshDocuments);
     socket.on("notification.created", refreshNotifications);
     return () => {
@@ -157,6 +158,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       socket.off("document.moved", refreshDocuments);
       socket.off("document.returned", refreshDocuments);
       socket.off("document.rerouted", refreshDocuments);
+      socket.off("document.reference.corrected", refreshDocuments);
       socket.off("workflow.published", refreshDocuments);
       socket.off("notification.created", refreshNotifications);
       socket.disconnect();

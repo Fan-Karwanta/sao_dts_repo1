@@ -5,6 +5,7 @@ export const permissions = [
   "documents.advance",
   "documents.return",
   "documents.reroute",
+  "documents.reference.correct",
   "users.manage",
   "registrations.manage",
   "roles.manage",

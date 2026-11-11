@@ -1,4 +1,5 @@
-import { ConflictException, NotFoundException } from "@nestjs/common";
+import { ConflictException, ForbiddenException, NotFoundException } from "@nestjs/common";
+import { Prisma } from "@sao/db";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AuditService } from "../audit/audit.service.js";
 import type { AuthContext, AuthUser } from "../common/auth-context.js";
@@ -12,7 +13,7 @@ const transaction = {
 };
 
 const database = {
-  documentRecord: { findUnique: vi.fn() },
+  documentRecord: { findUnique: vi.fn(), update: vi.fn() },
   workflowNode: { findUnique: vi.fn() },
   userRole: { findMany: vi.fn() },
   $transaction: vi.fn((callback: (tx: unknown) => unknown) => callback(transaction)),
@@ -140,5 +141,122 @@ describe("DocumentService.reroute", () => {
       "document.rerouted",
       expect.objectContaining({ targetNodeId: "node-a" }),
     );
+  });
+});
+
+describe("DocumentService.correctReference", () => {
+  const staffUser: AuthUser = {
+    ...user,
+    id: "staff-1",
+    roleKeys: ["procurement_staff"],
+    permissionKeys: ["documents.reference.correct"],
+  };
+  const staffContext: AuthContext = { ...context, user: staffUser };
+
+  const atStartDocument = {
+    ...document,
+    createdById: "staff-1",
+    currentNode: { id: "node-start", type: "START" },
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("rejects a missing document", async () => {
+    database.documentRecord.findUnique.mockResolvedValue(null);
+    await expect(
+      service.correctReference(context, "doc-1", "PR-002", "Typo in reference", 3),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it("rejects a non-admin who is not the creator", async () => {
+    database.documentRecord.findUnique.mockResolvedValue({
+      ...atStartDocument,
+      createdById: "someone-else",
+    });
+    await expect(
+      service.correctReference(staffContext, "doc-1", "PR-002", "Typo in reference", 3),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it("rejects the creator once the document has left the start step", async () => {
+    database.documentRecord.findUnique.mockResolvedValue({
+      ...atStartDocument,
+      currentNode: { id: "node-b", type: "FIELD" },
+    });
+    await expect(
+      service.correctReference(staffContext, "doc-1", "PR-002", "Typo in reference", 3),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it("rejects a stale expectedVersion", async () => {
+    database.documentRecord.findUnique.mockResolvedValue(atStartDocument);
+    await expect(
+      service.correctReference(staffContext, "doc-1", "PR-002", "Typo in reference", 2),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it("rejects an unchanged reference number", async () => {
+    database.documentRecord.findUnique.mockResolvedValue(atStartDocument);
+    await expect(
+      service.correctReference(staffContext, "doc-1", "PR-001", "Typo in reference", 3),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it("lets the creator correct the reference at the start step", async () => {
+    database.documentRecord.findUnique.mockResolvedValue(atStartDocument);
+    database.documentRecord.update.mockResolvedValue({
+      ...atStartDocument,
+      referenceNumber: "PR-002",
+      version: 4,
+    });
+    await service.correctReference(staffContext, "doc-1", "PR-002", "Typo in reference", 3);
+
+    expect(database.documentRecord.update).toHaveBeenCalledWith({
+      where: { id: "doc-1" },
+      data: { referenceNumber: "PR-002", version: { increment: 1 } },
+    });
+    expect(audit.record).toHaveBeenCalledWith(
+      staffContext,
+      expect.objectContaining({ action: "document.reference.corrected" }),
+    );
+    expect(realtime.emitToDocument).toHaveBeenCalledWith(
+      "doc-1",
+      "document.reference.corrected",
+      expect.objectContaining({ entityId: "doc-1", version: 4 }),
+    );
+  });
+
+  it("lets an admin correct the reference at any step", async () => {
+    database.documentRecord.findUnique.mockResolvedValue({
+      ...document,
+      createdById: "someone-else",
+      currentNode: { id: "node-b", type: "FIELD" },
+    });
+    database.documentRecord.update.mockResolvedValue({
+      ...document,
+      referenceNumber: "PR-002",
+      version: 4,
+    });
+    await service.correctReference(context, "doc-1", "PR-002", "Wrong reference entered", 3);
+
+    expect(database.documentRecord.update).toHaveBeenCalledWith({
+      where: { id: "doc-1" },
+      data: { referenceNumber: "PR-002", version: { increment: 1 } },
+    });
+  });
+
+  it("maps a duplicate reference number to a conflict", async () => {
+    database.documentRecord.findUnique.mockResolvedValue(atStartDocument);
+    database.documentRecord.update.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
+        code: "P2002",
+        clientVersion: "test",
+      }),
+    );
+    await expect(
+      service.correctReference(staffContext, "doc-1", "PR-002", "Typo in reference", 3),
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 });

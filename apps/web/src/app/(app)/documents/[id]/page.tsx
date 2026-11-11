@@ -8,6 +8,7 @@ import {
   FilePlus,
   FlagCheckered,
   GitBranch,
+  PencilSimple,
   WarningCircle,
 } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -24,6 +25,8 @@ interface DocumentDetail {
   referenceNumber: string;
   title: string;
   status: string;
+  version: number;
+  createdById: string;
   currentNode: WorkflowNode | null;
   workflowVersion: { nodes: WorkflowNode[] };
   movements: Array<{
@@ -63,6 +66,7 @@ export default function DocumentDetailPage() {
   };
   const [resolveTarget, setResolveTarget] = useState<string | null>(null);
   const [showReroute, setShowReroute] = useState(false);
+  const [showCorrect, setShowCorrect] = useState(false);
   const resolveConcern = useMutation({
     mutationFn: (input: { concernId: string; resolution: string }) =>
       api(`/documents/concerns/${input.concernId}/resolve`, {
@@ -82,6 +86,17 @@ export default function DocumentDetailPage() {
       }),
     onSuccess: async () => {
       setShowReroute(false);
+      await refresh();
+    },
+  });
+  const correctReference = useMutation({
+    mutationFn: (input: { referenceNumber: string; reason: string; expectedVersion: number }) =>
+      api(`/documents/${id}/reference`, {
+        method: "PATCH",
+        body: JSON.stringify(input),
+      }),
+    onSuccess: async () => {
+      setShowCorrect(false);
       await refresh();
     },
   });
@@ -125,6 +140,11 @@ export default function DocumentDetailPage() {
   const data = document.data;
   const canResolve = auth.data?.user.permissionKeys.includes("documents.fields.edit") ?? false;
   const canReroute = auth.data?.user.permissionKeys.includes("documents.reroute") ?? false;
+  const isAdmin = auth.data?.user.roleKeys.includes("admin") ?? false;
+  const canCorrectReference =
+    (auth.data?.user.permissionKeys.includes("documents.reference.correct") ?? false) &&
+    (isAdmin ||
+      (data.createdById === auth.data?.user.id && data.currentNode?.type === "START"));
   const statusTone =
     data.status === "RETURNED"
       ? "bg-amber-100 text-amber-900"
@@ -172,13 +192,23 @@ export default function DocumentDetailPage() {
                 Reroute
               </button>
             ) : null}
+            {canCorrectReference ? (
+              <button
+                className="flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-xs font-semibold text-primary-strong transition hover:bg-background"
+                onClick={() => setShowCorrect(true)}
+                type="button"
+              >
+                <PencilSimple size={12} />
+                Correct reference
+              </button>
+            ) : null}
           </div>
         </div>
       </div>
 
-      {resolveConcern.error || reroute.error ? (
+      {resolveConcern.error || reroute.error || correctReference.error ? (
         <p className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">
-          {(resolveConcern.error ?? reroute.error)?.message}
+          {(resolveConcern.error ?? reroute.error ?? correctReference.error)?.message}
         </p>
       ) : null}
 
@@ -277,6 +307,17 @@ export default function DocumentDetailPage() {
           onCancel={() => setShowReroute(false)}
           onSubmit={(targetNodeId, reason) => reroute.mutate({ targetNodeId, reason })}
           pending={reroute.isPending}
+        />
+      ) : null}
+
+      {showCorrect ? (
+        <CorrectReferenceDialog
+          currentReferenceNumber={data.referenceNumber}
+          onCancel={() => setShowCorrect(false)}
+          onSubmit={(referenceNumber, reason) =>
+            correctReference.mutate({ referenceNumber, reason, expectedVersion: data.version })
+          }
+          pending={correctReference.isPending}
         />
       ) : null}
     </div>
@@ -460,6 +501,102 @@ function RerouteDialog({
             type="submit"
           >
             {pending ? "Rerouting…" : "Reroute"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function CorrectReferenceDialog({
+  currentReferenceNumber,
+  onCancel,
+  onSubmit,
+  pending,
+}: {
+  currentReferenceNumber: string;
+  onCancel: () => void;
+  onSubmit: (referenceNumber: string, reason: string) => void;
+  pending: boolean;
+}) {
+  const [referenceNumber, setReferenceNumber] = useState("");
+  const [reason, setReason] = useState("");
+  const valid =
+    referenceNumber.trim().length > 0 &&
+    referenceNumber.trim() !== currentReferenceNumber &&
+    reason.trim().length >= 5;
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onCancel();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onCancel]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <button
+        aria-label="Close correct reference dialog"
+        className="absolute inset-0 cursor-default bg-primary-strong/40 backdrop-blur-sm"
+        onClick={onCancel}
+        type="button"
+      />
+      <form
+        aria-modal="true"
+        className="relative w-full max-w-md rounded-2xl border border-border bg-white p-6 shadow-2xl"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (valid && !pending) onSubmit(referenceNumber.trim(), reason.trim());
+        }}
+        role="dialog"
+      >
+        <div className="flex size-11 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+          <PencilSimple size={20} weight="bold" />
+        </div>
+        <h2 className="mt-4 text-base font-semibold text-primary-strong">Correct reference number</h2>
+        <p className="mt-1 text-sm text-muted">
+          Current reference: <strong>{currentReferenceNumber}</strong>. Corrections are recorded in
+          the audit trail with the reason below.
+        </p>
+        <label className="mt-4 grid gap-2 text-sm font-medium text-primary-strong">
+          New reference number
+          <input
+            autoFocus
+            className="h-10 rounded-lg border border-border px-3 font-normal"
+            maxLength={100}
+            onChange={(event) => setReferenceNumber(event.target.value)}
+            placeholder="Enter the correct reference number"
+            value={referenceNumber}
+          />
+        </label>
+        <label className="mt-4 grid gap-2 text-sm font-medium text-primary-strong">
+          Reason
+          <textarea
+            className="min-h-24 rounded-lg border border-border p-3 text-sm font-normal"
+            maxLength={1000}
+            onChange={(event) => setReason(event.target.value)}
+            placeholder="Why is the reference number being corrected?"
+            value={reason}
+          />
+        </label>
+        <p className="mt-1 text-xs text-muted">
+          {valid ? "" : "A new reference number and a reason of at least 5 characters are required."}
+        </p>
+        <div className="mt-6 flex justify-end gap-2">
+          <button
+            className="cursor-pointer rounded-xl border border-border px-4 py-2 text-sm font-semibold text-primary-strong transition hover:bg-background"
+            onClick={onCancel}
+            type="button"
+          >
+            Cancel
+          </button>
+          <button
+            className="cursor-pointer rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={!valid || pending}
+            type="submit"
+          >
+            {pending ? "Saving…" : "Save correction"}
           </button>
         </div>
       </form>

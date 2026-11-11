@@ -19,6 +19,7 @@ const permissionKeys = [
   "documents.advance",
   "documents.return",
   "documents.reroute",
+  "documents.reference.correct",
   "users.manage",
   "registrations.manage",
   "roles.manage",
@@ -123,7 +124,7 @@ async function main() {
   const permissionsByRole = new Map<string, readonly string[]>([
     ["admin", permissionKeys],
     ["sao", ["documents.view", "audit.view"]],
-    ["procurement_staff", [...staffPermissions, "documents.create"]],
+    ["procurement_staff", [...staffPermissions, "documents.create", "documents.reference.correct"]],
     ["budget_staff", staffPermissions],
     ["supply_staff", staffPermissions],
     ["pre_audit_staff", staffPermissions],

@@ -25,6 +25,12 @@ export const rerouteDocumentSchema = z.object({
   reason: z.string().trim().min(5).max(1000),
 });
 
+export const correctReferenceSchema = z.object({
+  referenceNumber: z.string().trim().min(1).max(100),
+  reason: z.string().trim().min(5).max(1000),
+  expectedVersion: z.number().int().nonnegative(),
+});
+
 export const resolveConcernSchema = z.object({
   resolution: z.string().trim().min(2).max(1000),
 });

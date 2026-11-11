@@ -3,6 +3,7 @@ import type { AuthContext } from "../common/auth-context.js";
 import { CurrentAuth, RequirePermissions } from "../common/request.decorators.js";
 import { parseBody } from "../common/validation.js";
 import {
+  correctReferenceSchema,
   createDocumentSchema,
   moveDocumentSchema,
   rerouteDocumentSchema,
@@ -48,6 +49,23 @@ export class DocumentController {
       id,
       nodeId,
       input.value,
+      input.expectedVersion,
+    );
+  }
+
+  @Patch(":id/reference")
+  @RequirePermissions("documents.reference.correct")
+  correctReference(
+    @CurrentAuth() context: AuthContext,
+    @Param("id") id: string,
+    @Body() body: unknown,
+  ) {
+    const input = parseBody(correctReferenceSchema, body);
+    return this.documents.correctReference(
+      context,
+      id,
+      input.referenceNumber,
+      input.reason,
       input.expectedVersion,
     );
   }

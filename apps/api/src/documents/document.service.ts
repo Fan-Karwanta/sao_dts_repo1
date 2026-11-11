@@ -84,26 +84,33 @@ export class DocumentService {
     const start = workflow.nodes.find((node) => node.type === "START") ?? workflow.nodes[0];
     if (!start) throw new ConflictException("Published workflow has no nodes");
 
-    const document = await this.database.$transaction(async (transaction) => {
-      const created = await transaction.documentRecord.create({
-        data: {
-          referenceNumber,
-          title,
-          workflowVersionId: workflow.id,
-          currentNodeId: start.id,
-          createdById: context.user.id,
-        },
+    const document = await this.database
+      .$transaction(async (transaction) => {
+        const created = await transaction.documentRecord.create({
+          data: {
+            referenceNumber,
+            title,
+            workflowVersionId: workflow.id,
+            currentNodeId: start.id,
+            createdById: context.user.id,
+          },
+        });
+        await transaction.documentMovement.create({
+          data: {
+            documentId: created.id,
+            type: "CREATE",
+            toNodeId: start.id,
+            actorId: context.user.id,
+          },
+        });
+        return created;
+      })
+      .catch((error: unknown) => {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+          throw new ConflictException("This reference number is already in use");
+        }
+        throw error;
       });
-      await transaction.documentMovement.create({
-        data: {
-          documentId: created.id,
-          type: "CREATE",
-          toNodeId: start.id,
-          actorId: context.user.id,
-        },
-      });
-      return created;
-    });
     await this.audit.record(context, {
       action: "document.created",
       targetType: "DocumentRecord",
@@ -407,6 +414,60 @@ export class DocumentService {
       entityId: documentId,
       version: updated.version,
       targetNodeId,
+    });
+    return this.get(documentId);
+  }
+
+  async correctReference(
+    context: AuthContext,
+    documentId: string,
+    referenceNumber: string,
+    reason: string,
+    expectedVersion: number,
+  ) {
+    const document = await this.database.documentRecord.findUnique({
+      where: { id: documentId },
+      include: { currentNode: true },
+    });
+    if (!document) throw new NotFoundException("Document not found");
+
+    const isAdmin = context.user.roleKeys.includes("admin");
+    const isCreatorAtStart =
+      document.createdById === context.user.id && document.currentNode?.type === "START";
+    if (!isAdmin && !isCreatorAtStart) {
+      throw new ForbiddenException(
+        "Only an administrator or the creator can correct the reference number",
+      );
+    }
+    if (document.version !== expectedVersion) {
+      throw new ConflictException("This document was changed by another user");
+    }
+    if (referenceNumber === document.referenceNumber) {
+      throw new ConflictException("This is already the document's reference number");
+    }
+
+    const updated = await this.database.documentRecord
+      .update({
+        where: { id: documentId },
+        data: { referenceNumber, version: { increment: 1 } },
+      })
+      .catch((error: unknown) => {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+          throw new ConflictException("This reference number is already in use");
+        }
+        throw error;
+      });
+    await this.audit.record(context, {
+      action: "document.reference.corrected",
+      targetType: "DocumentRecord",
+      targetId: documentId,
+      before: { referenceNumber: document.referenceNumber },
+      after: { referenceNumber: updated.referenceNumber, reason },
+    });
+    this.realtime.emitToDocument(documentId, "document.reference.corrected", {
+      id: randomUUID(),
+      entityId: documentId,
+      version: updated.version,
     });
     return this.get(documentId);
   }
